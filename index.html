@@ -359,6 +359,28 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
 .prime .pw{font-size:.75rem;color:var(--muted)}
 .prime.lost .pv{color:var(--muted);opacity:.6;text-decoration:line-through;text-decoration-color:currentColor;text-decoration-thickness:1.5px}
 .prime.lost .pw{color:var(--bad)}
+
+.adlist{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto;margin-bottom:10px}
+.adopt,.adpick{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;border:1px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:12px;padding:10px 12px;cursor:pointer;font:500 .95rem var(--f-ui)}
+.adopt span,.adpick span{font-size:.78rem;color:var(--muted)}
+.adopt:active,.adpick:active{transform:scale(.99)}
+.rv{border-top:1px solid var(--line);padding:10px 0}
+.rv.dup{opacity:.5}
+.rvtop{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center}
+.rvtop input[type=time],.rvtop input[type=number]{width:100%;font:15px var(--f-ui);padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.rvaddr{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.rvaddr .lab{font-size:.92rem;line-height:1.3}
+.rvaddr .raw{font-size:.78rem;color:var(--muted);font-style:italic}
+.badge{display:inline-block;font:600 .7rem var(--f-ui);padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.badge.ok{color:var(--good);background:color-mix(in srgb,var(--good) 15%,transparent)}
+.badge.warn{color:var(--amber);background:color-mix(in srgb,var(--amber) 18%,transparent)}
+.badge.ko{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+.cands{display:flex;flex-direction:column;gap:5px}
+.cands .adopt{padding:8px 10px;font-size:.88rem}
+.rvbtns{display:flex;gap:8px}
+.rvbtns button{font-size:.82rem;padding:6px 10px}
+.mission .ed{color:var(--muted)}
+.addstop{margin-top:6px;font-size:.85rem;padding:6px 10px}
 </style>
 </head>
 <body>
@@ -481,6 +503,39 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
   </div>
 </dialog>
 
+<!-- Address picker -->
+<dialog id="dlgAddr">
+  <div class="dh"><h2>Adresse de livraison</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
+  <div class="db">
+    <p class="small muted" id="adRaw" style="margin-top:0"></p>
+    <label class="f">Rechercher en Île-de-France<input id="adQ" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ex. 112 rue du Faubourg Saint-Honoré"></label>
+    <div id="adList" class="adlist"></div>
+    <div id="adManual" hidden>
+      <div class="grid2">
+        <label class="f">Code postal<input id="adMCp" inputmode="numeric" maxlength="5"></label>
+        <label class="f">Ville<input id="adMCity"></label>
+      </div>
+      <p class="small" id="adMErr" style="color:var(--bad);margin-top:-4px"></p>
+      <button class="main" id="adMSave">Valider cette adresse</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Add / edit a delivery -->
+<dialog id="dlgStop">
+  <div class="dh"><h2>Livraison</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
+  <div class="db">
+    <div class="grid2">
+      <label class="f">Heure<input type="time" id="stT"></label>
+      <label class="f">Km du trajet<input type="number" step="0.01" inputmode="decimal" id="stKm"></label>
+    </div>
+    <div class="lbl" style="margin-bottom:6px">Adresse</div>
+    <button type="button" class="adpick" id="stAddr">Choisir l'adresse…</button>
+    <p class="small" id="stErr" style="color:var(--bad)"></p>
+    <button class="main" id="stSave">Enregistrer la livraison</button>
+  </div>
+</dialog>
+
 <!-- Settings -->
 <dialog id="dlgSet">
   <div class="dh"><h2>Réglages</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
@@ -508,7 +563,7 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 3</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 4</p>
   </div>
 </dialog>
 
@@ -919,13 +974,15 @@ function renderMissions(){
     const dt=new Date(x.d+"T12:00");
     h+=`<div class="block day"><h3><span>${DAYS[dt.getDay()]}. ${dt.getDate()} ${MONTHS[dt.getMonth()]}</span><span class="muted">${n1(x.pts)} pts, ${n1(x.km)} km</span></h3>`+
       (x.hasTot?"":`<p class="small" style="color:var(--bad);margin:0 0 6px">Totaux du jour manquants : les points de cette journée ne sont pas comptés.</p>`)+
-      x.stops.map(m=>`<div class="mission"><span class="t">${esc(m.t||"--:--")}</span><span class="a" title="${esc(m.addr)}">${esc(m.addr||m.cp||"—")}</span><span class="small">${m.km?n1(m.km)+" km":""}</span><button aria-label="Supprimer la livraison" data-del="${esc(m.id)}">✕</button></div>`).join("")+
-      `<div style="text-align:right;margin-top:6px"><button class="ghost danger small" data-delday="${x.d}">Supprimer la journée</button></div></div>`;
+      x.stops.map(m=>`<div class="mission"><span class="t">${esc(m.t||"--:--")}</span><span class="a" title="${esc(m.addr)}">${esc(m.addr||m.cp||"—")}</span><span class="small">${m.km?n1(m.km)+" km":""}</span><span><button class="ed" aria-label="Modifier la livraison" data-ed="${esc(m.id)}">✎</button><button aria-label="Supprimer la livraison" data-del="${esc(m.id)}">✕</button></span></div>`).join("")+
+      `<div style="display:flex;justify-content:space-between;gap:8px;margin-top:8px"><button class="ghost addstop" data-add="${x.d}">+ Livraison</button><button class="ghost danger small" data-delday="${x.d}">Supprimer la journée</button></div></div>`;
   });
   if(ds.length>60) h+=`<p class="small muted">Jours plus anciens masqués : ils restent comptés et exportables.</p>`;
   $("#missionList").innerHTML=h;
   $$("[data-del]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>deleteStop(b.dataset.del)));
   $$("[data-delday]").forEach(b=>b.onclick=()=>armButton(b,"Confirmer la suppression",()=>deleteDay(b.dataset.delday)));
+  $$("[data-ed]").forEach(b=>b.onclick=()=>{ const id=b.dataset.ed; for(const k of allKeys()){ const st=M(k).stops.find(x=>x.id===id); if(st){ openStop(st.d, st); return; } } });
+  $$("[data-add]").forEach(b=>b.onclick=()=>openStop(b.dataset.add, null));
 }
 
 function renderAll(){
@@ -1007,10 +1064,92 @@ Règles : année ${year} sauf indication contraire. Nombres avec un point décim
     out.innerHTML=`<p class="small" style="color:var(--bad)">${msg}</p>`; go.disabled=false;
   }
 }
+/* ---------- adresses : Île-de-France uniquement ---------- */
+const IDF_DEPS=["75","77","78","91","92","93","94","95"];
+const isIdfCp = cp => /^\d{5}$/.test(cp||"") && IDF_DEPS.includes(String(cp).slice(0,2));
+const banCache={};
+async function banSearch(text,{limit=8,ac=false}={}){
+  text=String(text||"").replace(/\s+/g," ").trim().slice(0,190);
+  if(text.length<3) return [];
+  const key=(ac?"a|":"s|")+text.toLowerCase();
+  if(banCache[key]) return banCache[key];
+  const qs=`q=${encodeURIComponent(text)}&limit=${limit}&lat=48.8566&lon=2.3522${ac?"&autocomplete=1":""}`;
+  for(const u of [`https://data.geopf.fr/geocodage/search?${qs}`,`https://api-adresse.data.gouv.fr/search/?${qs}`]){
+    try{
+      const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),6000);
+      const r=await fetch(u,{signal:ctl.signal}); clearTimeout(to);
+      if(!r.ok) continue;
+      const j=await r.json(), seen=new Set();
+      const out=(j.features||[]).map(f=>({label:f.properties.label||"", name:f.properties.name||f.properties.label||"", cp:f.properties.postcode||"", city:f.properties.city||"", score:+f.properties.score||0, lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0]}))
+        .filter(c=>isIdfCp(c.cp) && !seen.has(c.label) && seen.add(c.label));
+      banCache[key]=out; return out;
+    }catch(e){}
+  }
+  return null; // service injoignable
+}
+const arrOf = cp => cp==="75116"?16:+String(cp).slice(3);
+const placeLabel = c => /^75\d{3}$/.test(c.cp) ? `Paris ${arrOf(c.cp)===1?"1er":arrOf(c.cp)+"e"}` : `${c.city} · ${c.cp}`;
+const sameCp = (a,b) => a===b || (a==="75016"&&b==="75116") || (a==="75116"&&b==="75016");
+async function resolveAddress(raw, trunc){
+  const hint=localGeo(raw).cp;
+  const q=raw.replace(/Paris\s*(\d{1,2})\b/i,(_,n)=>"750"+pad(+n)+" Paris");
+  let c=await banSearch(q,{limit:8, ac:!!trunc});
+  if(c===null) return {st:"offline", cands:[]};
+  if(trunc && c.length<2){ const c2=await banSearch(q,{limit:8}); if(c2&&c2.length){ const seen=new Set(c.map(x=>x.label)); c=c.concat(c2.filter(x=>!seen.has(x.label))); } }
+  if(hint){ const h=c.filter(x=>sameCp(x.cp,hint)); if(h.length) c=h.concat(c.filter(x=>!h.includes(x))); }
+  if(!c.length) return {st:"none", cands:[]};
+  const top=c[0], second=c[1];
+  const sure = !trunc && (!hint || sameCp(top.cp,hint)) && top.score>=0.7 && (!second || second.score < top.score-0.08);
+  return sure ? {st:"ok", pick:top, cands:c.slice(0,4)} : {st:"confirm", cands:c.slice(0,4)};
+}
+function applyPlace(s, c){ s.addr=c.label; s.cp=c.cp; s.city=c.city; s.lat=c.lat??null; s.lng=c.lng??null; s.st="ok"; s.cands=[]; }
+
+// sélecteur d'adresse avec suggestions
+let adResolve=null, adTimer=null;
+function openAddrPicker(initial, raw){
+  return new Promise(res=>{
+    adResolve=res;
+    $("#adRaw").textContent = raw ? `Lu sur la capture : « ${raw} »` : "";
+    $("#adRaw").hidden=!raw;
+    const q=$("#adQ"); q.value=(initial||"").replace(/\s*[.…]+$/,"");
+    $("#adManual").hidden=true; $("#adList").innerHTML="";
+    $("#dlgAddr").showModal();
+    adSearch(); setTimeout(()=>q.focus(),50);
+  });
+}
+function adDone(v){ const r=adResolve; adResolve=null; if($("#dlgAddr").open) $("#dlgAddr").close(); if(r) r(v); }
+async function adSearch(){
+  const text=$("#adQ").value.trim(), list=$("#adList");
+  if(text.length<3){ list.innerHTML=`<p class="small muted">Tape au moins 3 caractères.</p>`; return; }
+  list.innerHTML=`<p class="small muted">Recherche…</p>`;
+  const q=text.replace(/Paris\s*(\d{1,2})\b/i,(_,n)=>"750"+pad(+n)+" Paris");
+  const c=await banSearch(q,{limit:8, ac:true});
+  if(text!==$("#adQ").value.trim()) return;
+  if(c===null){
+    list.innerHTML=`<p class="small" style="color:var(--bad)">Suggestions indisponibles (pas de connexion, ou version Claude de l'outil). Saisis l'adresse et son code postal ci-dessous.</p>`;
+    $("#adManual").hidden=false; return;
+  }
+  $("#adManual").hidden=true;
+  if(!c.length){ list.innerHTML=`<p class="small muted">Aucune adresse trouvée en Île-de-France. Précise le numéro, la rue ou la ville.</p>`; return; }
+  list.innerHTML=c.map((x,i)=>`<button type="button" class="adopt" data-i="${i}"><b>${esc(x.name)}</b><span>${esc(placeLabel(x))}</span></button>`).join("");
+  $$("#adList .adopt").forEach(b=>b.onclick=()=>adDone(c[+b.dataset.i]));
+}
+$("#adQ").addEventListener("input",()=>{ clearTimeout(adTimer); adTimer=setTimeout(adSearch,280); });
+$("#adMSave").onclick=()=>{
+  const t=$("#adQ").value.trim(), cp=$("#adMCp").value.replace(/\D/g,"").slice(0,5), city=$("#adMCity").value.trim();
+  if(t.length<3){ $("#adQ").focus(); return; }
+  if(!isIdfCp(cp)){ $("#adMErr").textContent="Code postal hors Île-de-France ou incomplet (75, 77, 78, 91, 92, 93, 94, 95 uniquement)."; return; }
+  $("#adMErr").textContent="";
+  const ci = city || (/^75/.test(cp)?"Paris":"");
+  adDone({label:`${t}, ${cp} ${ci}`.trim(), name:t, cp, city:ci, lat:null, lng:null, manual:true});
+};
+$("#dlgAddr").addEventListener("close",()=>{ if(adResolve){ const r=adResolve; adResolve=null; r(null); } });
+
 function impReview(){
   const out=$("#impOut");
   if(!pend || !pend.length){ out.innerHTML=`<p>Aucune journée reconnue. Vérifie que les captures montrent bien le haut de l'onglet Stats, avec la date.</p>`; $("#impGo").disabled=false; return; }
-  let h="";
+  const BADGE={ok:`<span class="badge ok">✓ vérifiée</span>`, confirm:`<span class="badge warn">À confirmer</span>`, none:`<span class="badge ko">Introuvable</span>`, offline:`<span class="badge warn">Non vérifiée</span>`};
+  let h="", unresolved=0, offline=0;
   pend.forEach((j,ji)=>{
     const dt=new Date(j.d+"T12:00"), legs=sum(j.stops,s=>s.km);
     const dup=j.stops.filter(s=>s.dup).length;
@@ -1022,21 +1161,38 @@ function impReview(){
         <label class="f">Km du jour<input type="number" step="0.01" data-j="${ji}" data-f="km" value="${j.km??""}"></label>
         <label class="f">Points du jour<input type="number" step="0.1" data-j="${ji}" data-f="pts" value="${j.pts??""}"></label>
       </div>
-      <p class="small muted" style="margin-top:0">${pl(j.stops.length,"livraison")} lue${j.stops.length>1?"s":""}, ${n1(legs)} km de trajets entre livraisons${dup?`. ${dup} déjà enregistrée${dup>1?"s":""} (décochée${dup>1?"s":""})`:""}.</p>
-      <div class="scroll"><table><thead><tr><th></th><th>Heure</th><th>Adresse</th><th>CP</th><th>Km</th></tr></thead><tbody>${
-        j.stops.map((s,i)=>`<tr class="${s.dup?"dup":""}"><td><input type="checkbox" data-j="${ji}" data-i="${i}" data-f="keep" ${s.keep?"checked":""} aria-label="Garder"></td>
-        <td><input type="time" data-j="${ji}" data-i="${i}" data-f="t" value="${esc(s.t)}"></td>
-        <td><input data-j="${ji}" data-i="${i}" data-f="addr" value="${esc(s.addr)}" style="min-width:190px"></td>
-        <td><input data-j="${ji}" data-i="${i}" data-f="cp" value="${esc(s.cp)}" inputmode="numeric" style="min-width:66px"></td>
-        <td><input type="number" step="0.01" data-j="${ji}" data-i="${i}" data-f="km" value="${s.km}"></td></tr>`).join("")
-      }</tbody></table></div></div>`;
+      <p class="small muted" style="margin-top:0">${pl(j.stops.length,"livraison")} lue${j.stops.length>1?"s":""}, ${n1(legs)} km de trajets entre livraisons${dup?`. ${dup} déjà enregistrée${dup>1?"s":""} (décochée${dup>1?"s":""})`:""}.</p>`;
+    j.stops.forEach((s,i)=>{
+      const st=s.st||"ok";
+      if(s.keep && (st==="confirm"||st==="none")) unresolved++;
+      if(s.keep && st==="offline") offline++;
+      h+=`<div class="rv ${s.dup?"dup":""}">
+        <div class="rvtop"><input type="checkbox" data-j="${ji}" data-i="${i}" data-f="keep" ${s.keep?"checked":""} aria-label="Garder cette livraison">
+          <input type="time" data-j="${ji}" data-i="${i}" data-f="t" value="${esc(s.t)}" aria-label="Heure">
+          <input type="number" step="0.01" data-j="${ji}" data-i="${i}" data-f="km" value="${s.km}" aria-label="Km du trajet"></div>
+        <div class="rvaddr">
+          <div class="lab">${esc(st==="ok"?s.addr:(s.raw||s.addr)||"—")}${BADGE[st]||""}</div>
+          ${st!=="ok"&&s.raw?`<div class="raw">${st==="confirm"?"Lu sur la capture, choisis la bonne adresse :":st==="none"?"Aucune adresse correspondante en Île-de-France.":"Vérification impossible sans connexion."}</div>`:""}
+          ${st==="confirm"&&s.cands&&s.cands.length?`<div class="cands">${s.cands.map((c,ci)=>`<button type="button" class="adopt" data-pick="${ji}:${i}:${ci}"><b>${esc(c.name)}</b><span>${esc(placeLabel(c))}</span></button>`).join("")}</div>`:""}
+          <div class="rvbtns"><button type="button" class="ghost" data-edit="${ji}:${i}">${st==="ok"?"Modifier l'adresse":"Saisir une autre adresse"}</button></div>
+        </div></div>`;
+    });
+    h+=`</div>`;
   });
-  out.innerHTML=h+`<button class="main" id="impSave">Enregistrer</button>`;
+  const warn = unresolved ? `<p class="small" style="color:var(--bad)">${pl(unresolved,"adresse")} à confirmer avant d'enregistrer (ou décoche la livraison).</p>`
+    : offline ? `<p class="small" style="color:var(--amber)">${pl(offline,"adresse")} non vérifiée${offline>1?"s":""} faute de connexion : tu pourras les corriger plus tard dans l'onglet Missions.</p>` : "";
+  out.innerHTML=h+warn+`<button class="main" id="impSave" ${unresolved?"disabled":""}>Enregistrer</button>`;
   $$("#impOut [data-f]").forEach(inp=>inp.onchange=()=>{
     const j=pend[+inp.dataset.j], f=inp.dataset.f, tgt=inp.dataset.i!=null?j.stops[+inp.dataset.i]:j;
-    if(f==="keep") tgt.keep=inp.checked;
+    if(f==="keep"){ tgt.keep=inp.checked; impReview(); return; }
     else if(f==="km"||f==="pts") tgt[f]=inp.value===""?null:(+inp.value||0);
     else tgt[f]=inp.value;
+  });
+  $$("#impOut [data-pick]").forEach(b=>b.onclick=()=>{ const [ji,i,ci]=b.dataset.pick.split(":").map(Number); const s=pend[ji].stops[i]; applyPlace(s,s.cands[ci]); impReview(); });
+  $$("#impOut [data-edit]").forEach(b=>b.onclick=async()=>{
+    const [ji,i]=b.dataset.edit.split(":").map(Number); const s=pend[ji].stops[i];
+    const c=await openAddrPicker(s.st==="ok"?s.addr:(s.raw||s.addr), s.raw);
+    if(c){ applyPlace(s,c); impReview(); }
   });
   $("#impSave").onclick=()=>{
     const totals={}, stops=[];
@@ -1046,7 +1202,7 @@ function impReview(){
         const prev=M(monthKey(j.d)).days[j.d]||{};
         totals[j.d]={km:j.km??prev.km??0, pts:j.pts??prev.pts??0};
       }
-      j.stops.filter(s=>s.keep).forEach(({dup,keep,...s})=>stops.push({...s,d:j.d}));
+      j.stops.filter(s=>s.keep).forEach(({dup,keep,cands,raw,trunc,...s})=>stops.push({...s,d:j.d}));
     });
     saveImport(totals, stops);
     $("#dlgImport").close();
@@ -1098,8 +1254,9 @@ function parseStatsShot(lines, defDate){
     if(mk0 && !/\d{1,2}\s*:\s*\d{2}/.test(tx)){ pending=numFr(mk0[1]); seenAny=true; continue; }
     const mt=tx.match(/^[^\d]{0,3}(\d{1,2})\s*[:h]\s*(\d{2})\s+(.{3,})$/);
     if(mt){
+      const trunc=/(\.{2,}|…)\s*$/.test(mt[3]) || /,\s*$/.test(mt[3].trim());
       let addr=mt[3].replace(/^(?:[|!¦]\s*|[lI]\s+(?=\d))+/,"").replace(/^[^0-9A-Za-zÀ-ÿ]+/,"").replace(/[\s.…,;|]+$/,"").replace(/\s{2,}/g," ").trim();
-      out.stops.push({t:pad(+mt[1])+":"+mt[2], addr, km: pending!=null?pending:(seenAny?null:undefined)});
+      out.stops.push({t:pad(+mt[1])+":"+mt[2], addr, trunc, km: pending!=null?pending:(seenAny?null:undefined)});
       pending=null; seenAny=true; continue;
     }
     const mk=tx.match(/(\d+(?:[.,]\d+)?)\s*k\s*(?:m|rn)\b/i);
@@ -1118,7 +1275,7 @@ function mergeShots(shots){
     s.stops.forEach(st=>{
       const key=st.t+"|"+normAddr(st.addr).slice(0,10);
       const ex=d.stops.find(x=>x.key===key || (x.t===st.t && normAddr(x.addr).slice(0,6)===normAddr(st.addr).slice(0,6)));
-      if(ex){ if((ex.km==null||ex.km===undefined) && st.km!=null) ex.km=st.km; if(st.addr.length>ex.addr.length) ex.addr=st.addr; }
+      if(ex){ if((ex.km==null||ex.km===undefined) && st.km!=null) ex.km=st.km; if(st.addr.length>ex.addr.length || (ex.trunc && !st.trunc)){ ex.addr=st.addr; ex.trunc=st.trunc; } }
       else d.stops.push({...st,key});
     });
   });
@@ -1251,17 +1408,18 @@ async function ocrRun(files, defDate){
     await worker.terminate(); worker=null;
     const days=mergeShots(shots);
     if(!days.length || !days.some(d=>d.stops.length||d.km!=null)){ out.innerHTML=`<p class="small" style="color:var(--bad)">Je n'ai rien reconnu. Vérifie que ce sont bien des captures de l'onglet Stats, bien nettes.</p>`; go.disabled=false; return; }
-    const addrs=[...new Set(days.flatMap(d=>d.stops.map(s=>s.addr)))];
-    let done=0;
-    say(`Recherche des adresses… 0 / ${addrs.length}`);
-    const geo={};
-    const queue=[...addrs];
-    await Promise.all([0,1,2].map(async()=>{ while(queue.length){ const a=queue.shift(); geo[a]=await geocode(a); done++; say(`Recherche des adresses… ${done} / ${addrs.length}`); } }));
-    const keys=existingKeys();
+    const uniq=new Map(); days.forEach(d=>d.stops.forEach(s=>{ const k=s.addr+"|"+(s.trunc?1:0); if(!uniq.has(k)) uniq.set(k,{addr:s.addr,trunc:s.trunc}); }));
+    const items=[...uniq.entries()]; let done=0;
+    say(`Vérification des adresses… 0 / ${items.length}`);
+    const geo={}, queue=[...items];
+    await Promise.all([0,1,2].map(async()=>{ while(queue.length){ const [k,v]=queue.shift(); geo[k]=await resolveAddress(v.addr,v.trunc); done++; say(`Vérification des adresses… ${done} / ${items.length}`); } }));
+    const times=new Set(allKeys().flatMap(k=>normMonth(months[k]).stops.map(x=>x.d+"|"+x.t)));
     pend=days.map(d=>({d:d.d, km:d.km, pts:d.pts, stops:d.stops.map(st=>{
-      const g=geo[st.addr]||{};
-      const s={d:d.d, t:st.t, km:st.km||0, addr:st.addr, cp:g.cp||"", city:g.city||"", lat:g.lat??null, lng:g.lng??null};
-      s.dup=keys.has(keyOf(s)); s.keep=!s.dup; return s;
+      const g=geo[st.addr+"|"+(st.trunc?1:0)]||{st:"offline",cands:[]};
+      const loc=localGeo(st.addr);
+      const s={d:d.d, t:st.t, km:st.km||0, raw:st.addr, trunc:st.trunc, addr:st.addr, cp:loc.cp, city:loc.city, lat:null, lng:null, st:g.st, cands:g.cands||[]};
+      if(g.st==="ok") applyPlace(s,g.pick);
+      s.dup=times.has(d.d+"|"+st.t); s.keep=!s.dup; return s;
     })}));
     impReview();
   }catch(e){
@@ -1270,6 +1428,32 @@ async function ocrRun(files, defDate){
     go.disabled=false;
   }
 }
+
+/* ---------- ajouter / modifier une livraison ---------- */
+let stCtx=null;
+function stAddrRender(){
+  const p=stCtx.place;
+  $("#stAddr").innerHTML = p ? `<b>${esc(p.name||p.label)}</b><span>${esc(p.cp?placeLabel(p):"")}</span>` : `<b>Choisir l'adresse…</b><span>Île-de-France uniquement</span>`;
+}
+function openStop(d, stop){
+  stCtx={d, id:stop?stop.id:null, place: stop && stop.addr ? {label:stop.addr, name:stop.addr.replace(/,?\s*\d{5}\s.*$/,"").replace(/\s\d{5}\s.*$/,""), cp:stop.cp, city:stop.city, lat:stop.lat, lng:stop.lng} : null};
+  $("#stT").value = stop ? stop.t : "";
+  $("#stKm").value = stop ? (stop.km||0) : "";
+  $("#stErr").textContent="";
+  stAddrRender(); $("#dlgStop").showModal();
+}
+$("#stAddr").onclick=async()=>{ const c=await openAddrPicker(stCtx.place?stCtx.place.label:"", null); if(c){ stCtx.place=c; stAddrRender(); } };
+$("#stSave").onclick=()=>{
+  const t=$("#stT").value, km=parseFloat(String($("#stKm").value).replace(",","."))||0, p=stCtx.place;
+  if(!/^\d\d:\d\d$/.test(t)){ $("#stErr").textContent="Indique l'heure de la livraison."; return; }
+  if(!p || !isIdfCp(p.cp)){ $("#stErr").textContent="Choisis une adresse en Île-de-France."; return; }
+  const k=monthKey(stCtx.d), m=M(k);
+  const data={t, km, addr:p.label, cp:p.cp, city:p.city, lat:p.lat??null, lng:p.lng??null, st:"ok"};
+  if(stCtx.id){ const st=m.stops.find(x=>x.id===stCtx.id); if(st) Object.assign(st,data); }
+  else m.stops.push({id:newId(), d:stCtx.d, ...data});
+  m.stops.sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
+  saveMonth(k); $("#dlgStop").close(); renderAll();
+};
 
 /* ---------- settings ---------- */
 function openSettings(){
