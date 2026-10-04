@@ -381,9 +381,58 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
 .rvbtns button{font-size:.82rem;padding:6px 10px}
 .mission .ed{color:var(--muted)}
 .addstop{margin-top:6px;font-size:.85rem;padding:6px 10px}
+
+/* ===== écran d'ouverture ===== */
+:root{--sp-bg:#000;--sp-line:#EFEBE3;--sp-box:#CDAE72;--sp-hint:#8D8981}
+:root:not([data-skin]){--sp-bg:#fff;--sp-line:#0E1626;--sp-box:#2B4EEA;--sp-hint:#8A93A3}
+@media (prefers-color-scheme:dark){:root:not([data-skin]):not([data-theme="light"]){--sp-bg:#000;--sp-line:#EEF1F7;--sp-box:#6F8BFF;--sp-hint:#7D879A}}
+:root:not([data-skin])[data-theme="dark"]{--sp-bg:#000;--sp-line:#EEF1F7;--sp-box:#6F8BFF;--sp-hint:#7D879A}
+:root[data-skin="onyx"]{--sp-line:#EFEBE3;--sp-box:#CDAE72}
+:root[data-skin="graphite"]{--sp-line:#EDEBE6;--sp-box:#BFA77A}
+:root[data-skin="orbite"]{--sp-line:#EEEAFB;--sp-box:#A879FF}
+:root[data-skin="or"]{--sp-line:#F3EDE1;--sp-box:#D6B26E}
+:root[data-skin="rubis"]{--sp-line:#F7ECEF;--sp-box:#E8355F}
+:root[data-skin="studio"]{--sp-bg:#fff;--sp-line:#0D1218;--sp-box:#B6DB2C;--sp-hint:#8A929E}
+#splash{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:var(--sp-bg);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#splash .sp-ring{position:absolute;width:min(30vw,150px);aspect-ratio:1;border-radius:50%;border:1.2px solid var(--sp-box);opacity:0}
+#splash svg{width:min(38vw,190px);position:relative;overflow:visible}
+#splash .sp-l{fill:none;stroke:var(--sp-line);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+#splash .sp-l>*{stroke-dasharray:120;stroke-dashoffset:120}
+#splash .sp-spd{stroke:var(--sp-box);stroke-width:1.8;stroke-linecap:round;opacity:0}
+#splash .sp-box{fill:var(--sp-box);stroke:var(--sp-line);stroke-width:1.4;opacity:0}
+#splash .sp-hint{position:absolute;left:0;right:0;bottom:calc(16% + env(safe-area-inset-bottom,0px));text-align:center;font:500 .72rem var(--f-ui);letter-spacing:.22em;text-transform:uppercase;color:var(--sp-hint);transition:opacity .4s ease;animation:spHint 2.4s ease-in-out .6s infinite}
+@keyframes spHint{0%,100%{opacity:.45}50%{opacity:1}}
+@keyframes spDraw{from{stroke-dashoffset:120}to{stroke-dashoffset:0}}
+@keyframes spIn{from{opacity:0}to{opacity:1}}
+@keyframes spSwell{0%{transform:scale(1);animation-timing-function:cubic-bezier(.3,0,.2,1)}30%{transform:scale(1.07);animation-timing-function:cubic-bezier(.45,0,.8,.55)}100%{transform:scale(.8)}}
+@keyframes spRing{0%{transform:scale(.55);opacity:0}20%{opacity:.6}100%{transform:scale(2.1);opacity:0}}
+@keyframes spOut{to{opacity:0;visibility:hidden}}
+#splash.go{cursor:default}
+#splash.go .sp-hint{animation:none;opacity:0}
+#splash.go .sp-l>*{animation:spDraw 1.45s cubic-bezier(.6,0,.35,1) both}
+#splash.go .sp-box,#splash.go .sp-spd{animation:spIn .7s .85s cubic-bezier(.4,0,.3,1) both}
+#splash.go svg{animation:spSwell 1.95s 1.6s both}
+#splash.go .sp-ring{animation:spRing 1.5s 1.6s cubic-bezier(.2,.6,.3,1) both}
+#splash.go{animation:spOut .6s 2.95s ease-in forwards}
+@media (prefers-reduced-motion:reduce){
+  #splash .sp-hint{animation:none;opacity:.8}
+  #splash .sp-l>*{stroke-dashoffset:0}
+  #splash .sp-box,#splash .sp-spd{opacity:1}
+  #splash.go,#splash.go *{animation:none!important}
+  #splash.go{opacity:0;transition:opacity .4s ease}
+}
 </style>
 </head>
 <body>
+<div id="splash" role="button" tabindex="0" aria-label="Toucher pour entrer dans Courscore">
+  <div class="sp-ring"></div>
+  <svg viewBox="-6 0 76 42" aria-hidden="true">
+    <path class="sp-spd" d="M-4 16h7M-5 21h5M-3 26h6"/>
+    <g class="sp-l"><circle cx="14" cy="29" r="8.5"/><circle cx="57" cy="31" r="6.5"/><path d="M14 29h11L21 13M14 29 21 13M25 29l5 2h27M21 13l9 1.5L30 31M30 14.5V9M27 9h6M18 12h6M54.5 17 57 31"/></g>
+    <rect class="sp-box" x="33" y="18.5" width="19" height="11" rx="2.5"/>
+  </svg>
+  <div class="sp-hint">Touche pour entrer</div>
+</div>
 <main>
   <header class="top">
     <h1>Courscore<small id="sub">Chargement…</small></h1>
@@ -563,7 +612,7 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 4</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 5</p>
   </div>
 </dialog>
 
@@ -1549,6 +1598,56 @@ $("#monthSel").onchange=e=>{selMonth=e.target.value;renderMois();};
 $("#btnSettings").onclick=openSettings;
 $("#btnImport").onclick=impStart;
 $$("[data-close]").forEach(b=>b.onclick=()=>{ if(impCtl) impCtl.abort(); b.closest("dialog").close(); });
+
+/* ---------- écran d'ouverture : animation + son ---------- */
+(function(){
+  const el=$("#splash"); if(!el) return;
+  const RM=window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SND={pv:.50,pf:.50,cv:.85,cf:0,dv:.85,df:1,master:.54};
+  function sound(){
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    let ctx; try{ ctx=new AC(); }catch(e){ return; }
+    if(ctx.state==="suspended") ctx.resume().catch(()=>{});
+    const master=ctx.createGain(); master.gain.value=SND.master;
+    const comp=ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+    const rev=ctx.createConvolver(), rl=Math.floor(ctx.sampleRate*2.2), rb=ctx.createBuffer(2,rl,ctx.sampleRate);
+    for(let c=0;c<2;c++){ const d=rb.getChannelData(c); for(let i=0;i<rl;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/rl,3.2); }
+    rev.buffer=rb; const rg=ctx.createGain(); rg.gain.value=.35; rev.connect(rg); rg.connect(master);
+    const out=(n,wet)=>{ n.connect(master); if(wet){ const w=ctx.createGain(); w.gain.value=wet; n.connect(w); w.connect(rev); } };
+    const nbuf=dur=>{ const len=Math.ceil(ctx.sampleRate*dur), b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0); for(let i=0;i<len;i++) d[i]=Math.random()*2-1; const s=ctx.createBufferSource(); s.buffer=b; return s; };
+    const t=ctx.currentTime+.06, SC=1.45/1.3;
+    // tracé (s'arrête quand les roues se referment)
+    (()=>{ const v=SND.pv,k=SND.pf,end=.60*SC,peak=.035*v*(1+.6*k),s=nbuf(end+.05),f=ctx.createBiquadFilter(),l=ctx.createBiquadFilter(),g=ctx.createGain();
+      f.type="bandpass"; f.frequency.setValueAtTime(2600*(1-.6*k),t+.04); f.frequency.exponentialRampToValueAtTime(3800*(1-.6*k),t+end); f.Q.value=.8-.4*k;
+      l.type="lowpass"; l.frequency.value=9000-7200*k; l.Q.value=.3;
+      g.gain.setValueAtTime(.0001,t+.04); g.gain.exponentialRampToValueAtTime(peak,t+.38*SC); g.gain.linearRampToValueAtTime(peak*.9,t+end-.04); g.gain.linearRampToValueAtTime(.0001,t+end);
+      s.connect(f); f.connect(l); l.connect(g); out(g,.15+.25*k); s.start(t+.04); s.stop(t+end+.03); })();
+    // cliquetis de roue libre (jusqu'à la fin du dessin)
+    (()=>{ const v=SND.cv,k=SND.cf,peak=.05*v*(1+.8*k),len=.018+.014*k; let x=.1*SC,iv=.13*SC;
+      while(x<1.45){ const s=nbuf(len),f=ctx.createBiquadFilter(),l=ctx.createBiquadFilter(),g=ctx.createGain();
+        f.type="highpass"; f.frequency.value=4000-2600*k; l.type="lowpass"; l.frequency.value=14000-10500*k;
+        g.gain.setValueAtTime(.0001,t+x); g.gain.exponentialRampToValueAtTime(peak,t+x+.002+.004*k); g.gain.exponentialRampToValueAtTime(.0001,t+x+len);
+        s.connect(f); f.connect(l); l.connect(g); out(g,.12+.25*k); s.start(t+x); s.stop(t+x+len); x+=iv; iv=Math.max(.045*SC,iv*.88); } })();
+    // goutte feutrée (avec l'anneau)
+    (()=>{ const v=SND.dv,k=SND.df,td=t+1.6,att=.01+.025*k,lp=6000-4800*k,wet=.7+.15*k;
+      const tone=(f0,t0,dur,vol,f1,glide,w)=>{ const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter();
+        o.frequency.setValueAtTime(f0,t0); o.frequency.exponentialRampToValueAtTime(f1,t0+glide);
+        g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(Math.max(.0002,vol),t0+att); g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+        fl.type="lowpass"; fl.frequency.value=lp; fl.Q.value=.4; o.connect(g); g.connect(fl); out(fl,w); o.start(t0); o.stop(t0+dur+.05); };
+      tone(420,td,.5+.15*k,.22*(1-.5*k)*v,980,.06,wet); tone(640,td+.17,.4,.06*(1-.7*k)*v,1300,.05,wet+.05); })();
+    setTimeout(()=>{ try{ ctx.close(); }catch(e){} },6000);
+  }
+  let started=false;
+  function start(e){
+    if(started) return; started=true;
+    if(e) e.preventDefault();
+    try{ sound(); }catch(err){}
+    el.classList.add("go");
+    setTimeout(()=>el.remove(), RM?450:3600);
+  }
+  el.addEventListener("click",start);
+  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" ") start(e); });
+})();
 
 lsLoad(); viewMode=S.goalMode; applyTheme(); renderAll();
 initDb(); samplePromise = initSample();
