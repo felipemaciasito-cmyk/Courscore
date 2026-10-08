@@ -612,7 +612,7 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 5</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 6</p>
   </div>
 </dialog>
 
@@ -1117,19 +1117,19 @@ Règles : année ${year} sauf indication contraire. Nombres avec un point décim
 const IDF_DEPS=["75","77","78","91","92","93","94","95"];
 const isIdfCp = cp => /^\d{5}$/.test(cp||"") && IDF_DEPS.includes(String(cp).slice(0,2));
 const banCache={};
-async function banSearch(text,{limit=8,ac=false}={}){
+async function banSearch(text,{limit=8,ac=false,postcode=null}={}){
   text=String(text||"").replace(/\s+/g," ").trim().slice(0,190);
   if(text.length<3) return [];
-  const key=(ac?"a|":"s|")+text.toLowerCase();
+  const key=(ac?"a|":"s|")+(postcode||"")+"|"+limit+"|"+text.toLowerCase();
   if(banCache[key]) return banCache[key];
-  const qs=`q=${encodeURIComponent(text)}&limit=${limit}&lat=48.8566&lon=2.3522${ac?"&autocomplete=1":""}`;
+  const qs=`q=${encodeURIComponent(text)}&limit=${limit}&lat=48.8566&lon=2.3522${ac?"&autocomplete=1":""}${postcode?"&postcode="+postcode:""}`;
   for(const u of [`https://data.geopf.fr/geocodage/search?${qs}`,`https://api-adresse.data.gouv.fr/search/?${qs}`]){
     try{
       const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),6000);
       const r=await fetch(u,{signal:ctl.signal}); clearTimeout(to);
       if(!r.ok) continue;
       const j=await r.json(), seen=new Set();
-      const out=(j.features||[]).map(f=>({label:f.properties.label||"", name:f.properties.name||f.properties.label||"", cp:f.properties.postcode||"", city:f.properties.city||"", score:+f.properties.score||0, lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0]}))
+      const out=(j.features||[]).map(f=>{ const p=f.properties||{}; return {label:p.label||"", name:p.name||p.label||"", street:p.street||p.name||"", hn:p.housenumber||"", type:p.type||"", cp:p.postcode||"", city:p.city||"", score:+p.score||0, lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0]}; })
         .filter(c=>isIdfCp(c.cp) && !seen.has(c.label) && seen.add(c.label));
       banCache[key]=out; return out;
     }catch(e){}
@@ -1139,17 +1139,90 @@ async function banSearch(text,{limit=8,ac=false}={}){
 const arrOf = cp => cp==="75116"?16:+String(cp).slice(3);
 const placeLabel = c => /^75\d{3}$/.test(c.cp) ? `Paris ${arrOf(c.cp)===1?"1er":arrOf(c.cp)+"e"}` : `${c.city} · ${c.cp}`;
 const sameCp = (a,b) => a===b || (a==="75016"&&b==="75116") || (a==="75116"&&b==="75016");
-async function resolveAddress(raw, trunc){
-  const hint=localGeo(raw).cp;
-  const q=raw.replace(/Paris\s*(\d{1,2})\b/i,(_,n)=>"750"+pad(+n)+" Paris");
-  let c=await banSearch(q,{limit:8, ac:!!trunc});
+const STOP_W=new Set(["de","du","des","la","le","les","l","d","et","a","au","aux"]);
+const lowerA = s => deacc(s).toLowerCase();
+function cleanRaw(a){ return String(a||"").replace(/\((er)\b/gi,"1er").replace(/[|¦]/g," ").replace(/\s+/g," ").replace(/[\s.…,;:]+$/,"").trim(); }
+// découpe « 112 Rue du Faubourg Saint-Ho…, Paris 8 » en numéro / rue / ville (même tronqués)
+function splitAddr(raw){
+  const r=cleanRaw(raw); const i=r.lastIndexOf(",");
+  let street=i>0?r.slice(0,i).trim():r, cityPart=i>0?r.slice(i+1).trim():"";
+  if(!cityPart){ const m=street.match(/^(.*?)\s+(Paris\s*\d{1,2})$/i); if(m){ street=m[1]; cityPart=m[2]; } }
+  const hn=street.match(/^(\d+)\s*(bis|ter|[a-d])?\b/i)||[];
+  const A={r, street, num:hn[1]||"", suf:(hn[2]||"").toLowerCase(), cp:"", city:"", prefix:"", streetName:street.replace(/^\d+\s*(bis|ter|[a-d])?\s+/i,"")};
+  const mp=cityPart.match(/^Paris\s*(\d{1,2})?/i);
+  if(mp && mp[1]){ A.cp="750"+pad(+mp[1]); A.city="Paris"; }
+  else if(mp){ A.city="Paris"; A.prefix="paris"; }
+  else if(cityPart){ const loc=localGeo(cityPart); if(loc.cp){ A.cp=loc.cp; A.city=loc.city; } else A.prefix=lowerA(cityPart).replace(/[^a-z0-9 -]/g,"").slice(0,12); }
+  return A;
+}
+function tokens(s){ return lowerA(s).replace(/[^a-z0-9]+/g," ").trim().split(" ").filter(w=>w.length>1 && !STOP_W.has(w)); }
+function near1(a,b){ if(Math.abs(a.length-b.length)>1 || a.length<4) return false; let i=0,j=0,e=0; while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue;} if(++e>1) return false; if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++;} } return e+(a.length-i)+(b.length-j)<=1; }
+function streetSim(a,b){
+  const A=tokens(a), B=tokens(b); if(!A.length||!B.length) return 0;
+  let m=0; A.forEach((w,i)=>{ if(B.includes(w)) m++; else if(i===A.length-1 && B.some(v=>v.startsWith(w))) m++; else if(B.some(v=>near1(v,w))) m+=.75; });
+  return m/A.length;
+}
+function scoreCand(x,A){
+  let s=x.score;
+  if(A.cp) s+= sameCp(x.cp,A.cp)?.3:-.4;
+  else if(A.prefix) s+= lowerA(x.city).startsWith(A.prefix)?.22:-.3;
+  if(A.num){ if(x.hn){ const h=String(x.hn).toLowerCase().replace(/\s/g,""); s+= (h===A.num+A.suf||h===A.num)?.22:-.25; } else s-=.12; }
+  s+= .6*streetSim(A.streetName, x.street||x.name) - .25;
+  return s;
+}
+// toutes les propositions plausibles, classées par pertinence
+async function smartCands(raw){
+  const A=splitAddr(raw);
+  if(A.street.length<3) return {A, c:[]};
+  const loc = A.cp ? ` ${A.cp} ${A.city||""}` : (A.city && !A.prefix ? ` ${A.city}` : "");
+  const pc = A.cp && !["75016","75116"].includes(A.cp) ? A.cp : null;
+  const Q=[[A.street+loc,{limit:10}],[A.street+loc,{limit:10,ac:true}]];
+  if(pc) Q.push([A.street,{limit:10,ac:true,postcode:pc}]);
+  if(!A.cp) Q.push([A.street,{limit:15,ac:true}]);
+  if(A.num) Q.push([A.streetName+loc,{limit:8,ac:true}]);
+  const res=await Promise.all(Q.map(([q,o])=>banSearch(q,o)));
+  if(res.every(r=>r===null)) return {A, c:null};
+  const all=new Map(); res.forEach(r=>(r||[]).forEach(x=>{ const p=all.get(x.label); if(!p||p.score<x.score) all.set(x.label,{...x}); }));
+  const c=[...all.values()]; c.forEach(x=>x.sc=scoreCand(x,A)); c.sort((a,b)=>b.sc-a.sc);
+  return {A, c};
+}
+async function resolveAddress(raw){
+  const {A,c}=await smartCands(raw);
   if(c===null) return {st:"offline", cands:[]};
-  if(trunc && c.length<2){ const c2=await banSearch(q,{limit:8}); if(c2&&c2.length){ const seen=new Set(c.map(x=>x.label)); c=c.concat(c2.filter(x=>!seen.has(x.label))); } }
-  if(hint){ const h=c.filter(x=>sameCp(x.cp,hint)); if(h.length) c=h.concat(c.filter(x=>!h.includes(x))); }
   if(!c.length) return {st:"none", cands:[]};
-  const top=c[0], second=c[1];
-  const sure = !trunc && (!hint || sameCp(top.cp,hint)) && top.score>=0.7 && (!second || second.score < top.score-0.08);
-  return sure ? {st:"ok", pick:top, cands:c.slice(0,4)} : {st:"confirm", cands:c.slice(0,4)};
+  const top=c[0], second=c.find(x=>x.label!==top.label);
+  const margin = second ? top.sc-second.sc : 1;
+  const hnOk = !A.num || String(top.hn).toLowerCase().startsWith(A.num);
+  const ok = top.sc>=1.0 && margin>=.12 && hnOk;
+  return ok ? {st:"ok", pick:top, cands:c.slice(0,6)} : {st:"confirm", cands:c.slice(0,6)};
+}
+// départage les cas douteux avec l'itinéraire : la distance réelle d'un trajet (bulle « X Km »)
+// borne la distance à vol d'oiseau depuis la livraison précédente / vers la suivante
+function haversine(a,b){ const R=6371,r=Math.PI/180,dl=(b.lat-a.lat)*r,dg=(b.lng-a.lng)*r; const h=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dg/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function geoPen(d,L){ const hi=L*1.05+.15, lo=L/2.4-.2; if(d>hi) return Math.min(.9,(d-hi)/Math.max(L,.5)*.9); if(d<lo) return .2; return -.08; }
+function refineByRoute(days){
+  for(let pass=0;pass<3;pass++){
+    let changed=false;
+    days.forEach(d=>{ const S=d.stops;
+      S.forEach((s,i)=>{
+        if(s.st!=="confirm" || !s.cands || !s.cands.length) return;
+        const prev=i>0 && S[i-1].st==="ok" && S[i-1].lat!=null ? S[i-1] : null;
+        const next=i<S.length-1 && S[i+1].st==="ok" && S[i+1].lat!=null ? S[i+1] : null;
+        if(!prev && !next) return;
+        s.cands.forEach(c=>{ let pen=0;
+          if(prev && s.km>0) pen+=geoPen(haversine(prev,c),s.km);
+          if(next && next.km>0) pen+=geoPen(haversine(c,next),next.km);
+          c.sc2=c.sc-pen; });
+        s.cands.sort((a,b)=>(b.sc2??b.sc)-(a.sc2??a.sc));
+        const top=s.cands[0], sec=s.cands.find(x=>x.label!==top.label);
+        const A=splitAddr(s.raw||s.addr);
+        const hnOk=!A.num || String(top.hn).toLowerCase().startsWith(A.num);
+        if(hnOk && top.sc2>=.95 && (!sec || top.sc2-(sec.sc2??sec.sc)>=.15)){ applyPlace(s,top); changed=true; }
+      });
+    });
+    if(!changed) break;
+  }
+  days.forEach(d=>d.stops.forEach(s=>{ if(s.cands) s.cands=s.cands.slice(0,4); }));
 }
 function applyPlace(s, c){ s.addr=c.label; s.cp=c.cp; s.city=c.city; s.lat=c.lat??null; s.lng=c.lng??null; s.st="ok"; s.cands=[]; }
 
@@ -1171,8 +1244,7 @@ async function adSearch(){
   const text=$("#adQ").value.trim(), list=$("#adList");
   if(text.length<3){ list.innerHTML=`<p class="small muted">Tape au moins 3 caractères.</p>`; return; }
   list.innerHTML=`<p class="small muted">Recherche…</p>`;
-  const q=text.replace(/Paris\s*(\d{1,2})\b/i,(_,n)=>"750"+pad(+n)+" Paris");
-  const c=await banSearch(q,{limit:8, ac:true});
+  const res=await smartCands(text); const c=res.c===null?null:res.c.slice(0,8);
   if(text!==$("#adQ").value.trim()) return;
   if(c===null){
     list.innerHTML=`<p class="small" style="color:var(--bad)">Suggestions indisponibles (pas de connexion, ou version Claude de l'outil). Saisis l'adresse et son code postal ci-dessous.</p>`;
@@ -1207,7 +1279,7 @@ function impReview(){
       <div class="grid2">
         <label class="f">Date<input type="date" data-j="${ji}" data-f="d" value="${esc(j.d)}"></label>
         <span></span>
-        <label class="f">Km du jour<input type="number" step="0.01" data-j="${ji}" data-f="km" value="${j.km??""}"></label>
+        <label class="f">Km du jour${j.kmGuess?` <span style="color:var(--amber)">· estimé</span>`:""}<input type="number" step="0.01" data-j="${ji}" data-f="km" value="${j.km??""}"></label>
         <label class="f">Points du jour<input type="number" step="0.1" data-j="${ji}" data-f="pts" value="${j.pts??""}"></label>
       </div>
       <p class="small muted" style="margin-top:0">${pl(j.stops.length,"livraison")} lue${j.stops.length>1?"s":""}, ${n1(legs)} km de trajets entre livraisons${dup?`. ${dup} déjà enregistrée${dup>1?"s":""} (décochée${dup>1?"s":""})`:""}.</p>`;
@@ -1233,6 +1305,7 @@ function impReview(){
   out.innerHTML=h+warn+`<button class="main" id="impSave" ${unresolved?"disabled":""}>Enregistrer</button>`;
   $$("#impOut [data-f]").forEach(inp=>inp.onchange=()=>{
     const j=pend[+inp.dataset.j], f=inp.dataset.f, tgt=inp.dataset.i!=null?j.stops[+inp.dataset.i]:j;
+    if(f==="km" && inp.dataset.i==null) j.kmGuess=false;
     if(f==="keep"){ tgt.keep=inp.checked; impReview(); return; }
     else if(f==="km"||f==="pts") tgt[f]=inp.value===""?null:(+inp.value||0);
     else tgt[f]=inp.value;
@@ -1265,7 +1338,7 @@ const MONTH_IDX={janvier:0,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,aout:
 const deacc = t => String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 const numFr = t => parseFloat(String(t).replace(",","."));
 // lines: [{text, y}] triées de haut en bas, pour UNE capture
-function parseStatsShot(lines, defDate){
+function parseStatsShot(lines, defDate, hdr){
   const out={date:null, km:null, pts:null, stops:[]};
   const all=lines.map(l=>l.text).join("\n");
   const md=deacc(all).toLowerCase().match(/(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)(?:\s+(\d{4}))?/);
@@ -1290,10 +1363,20 @@ function parseStatsShot(lines, defDate){
       toks.forEach(t=>nums.length<2&&nums.push(numFr(t)));
       if(nums.length) start=i+1;
     }
-    if(nums.length===2){ out.km=nums[0]; out.pts=nums[1]; }
-    else if(nums.length===1){ out.km=nums[0]; }
+    // position gauche / droite : Km toujours à gauche, Points toujours à droite
+    if(hdr && hdr.W){
+      for(let i=iP;i<Math.min(lines.length,iP+4);i++){
+        const L=lines[i]; if(!L.parts || /\d{1,2}:\d{2}/.test(L.text)) continue;
+        L.parts.forEach(p=>{ const t=p.text.replace(/(km|points)/ig," ").match(/\d+(?:[.,]\d+)?/); if(!t) return;
+          const left=(p.x+p.w/2)<hdr.W/2;
+          if(left && out.km==null) out.km=numFr(t[0]); else if(!left && out.pts==null) out.pts=numFr(t[0]); });
+      }
+    }
+    if(out.km==null && out.pts==null && nums.length===2){ out.km=nums[0]; out.pts=nums[1]; }
     if(!start) start=iP+1;
   }
+  // lecture ciblée des deux chiffres de l'en-tête (la plus fiable)
+  if(hdr){ if(hdr.km!=null) out.km=hdr.km; if(hdr.pts!=null) out.pts=hdr.pts; }
   // frise : bulles "X Km" puis livraisons "HH:MM adresse"
   let pending=null, seenAny=false;
   for(let i=start;i<lines.length;i++){
@@ -1370,7 +1453,7 @@ async function geocode(addr){
 }
 function ocrLines(data){
   return (data.lines&&data.lines.length?data.lines:(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>p.lines||[])))
-    .map(l=>{ const b=l.bbox||{x0:0,y0:0,y1:0}; return {text:(l.text||"").trim(), y:(b.y0+b.y1)/2, x:b.x0, h:Math.max(1,b.y1-b.y0)}; }).filter(l=>l.text);
+    .map(l=>{ const b=l.bbox||{x0:0,x1:0,y0:0,y1:0}; return {text:(l.text||"").trim(), y:(b.y0+b.y1)/2, y0:b.y0, y1:b.y1, x:b.x0, w:Math.max(1,(b.x1||b.x0)-b.x0), h:Math.max(1,b.y1-b.y0)}; }).filter(l=>l.text);
 }
 const KM_RE=/(\d+(?:[.,]\d+)?)\s*k\s*(?:m|rn)\b/i;
 // passe 1 : page entière (date, totaux, heures, adresses) ; passe 2 : colonne des bulles « X Km »
@@ -1378,12 +1461,29 @@ function combineOcr(l1, l2){
   const lines=l1.slice().sort((a,b)=>a.y-b.y);
   const rows=[];
   lines.forEach(l=>{ const r=rows[rows.length-1]; if(r && Math.abs(l.y-r.y)<Math.max(r.h,l.h)*0.6){ r.parts.push(l); r.h=Math.max(r.h,l.h); } else rows.push({y:l.y,h:l.h,parts:[l]}); });
-  let merged=rows.map(r=>({y:r.y, text:r.parts.sort((a,b)=>a.x-b.x).map(p=>p.text).join(" ")}));
+  let merged=rows.map(r=>{ const parts=r.parts.sort((a,b)=>a.x-b.x); return {y:r.y, text:parts.map(p=>p.text).join(" "), parts}; });
   const iP=merged.findIndex(m=>/points/i.test(m.text));
   const yTop = iP>=0 ? merged[Math.min(merged.length-1,iP+1)].y : 0;
   const bubbles=l2.filter(l=>l.y>yTop && KM_RE.test(l.text) && !/\d{1,2}\s*:\s*\d{2}/.test(l.text)).map(l=>({y:l.y, text:l.text.match(KM_RE)[1]+" Km"}));
   if(bubbles.length) merged=merged.filter(m=>m.y<=yTop || !KM_RE.test(m.text) || /\d{1,2}\s*:\s*\d{2}/.test(m.text));
   return merged.concat(bubbles).sort((a,b)=>a.y-b.y);
+}
+// lit séparément le chiffre de gauche (Km) et celui de droite (Points) sous les intitulés
+async function readHeader(worker, pre, l1){
+  const W=pre.w, H=pre.h;
+  const lab=l1.filter(l=>l.y<H*.4 && /(points|\bkm\b)/i.test(l.text)).sort((a,b)=>a.y-b.y)[0];
+  const top=Math.round(lab ? lab.y1+lab.h*.15 : H*.155), height=Math.round(lab ? lab.h*3.2 : H*.06);
+  const res={km:null, pts:null, W};
+  try{
+    await worker.setParameters({tessedit_pageseg_mode:"7", tessedit_char_whitelist:"0123456789.,"});
+    for(const [key,left] of [["km",0],["pts",Math.round(W/2)]]){
+      const r=await worker.recognize(pre.full,{rectangle:{left, top, width:Math.round(W/2), height}});
+      const m=String(r.data.text||"").replace(/\s/g,"").replace(",",".").match(/\d+(?:\.\d+)?/);
+      if(m){ const v=parseFloat(m[0]); if(isFinite(v) && v<2000) res[key]=v; }
+    }
+  }catch(e){}
+  try{ await worker.setParameters({tessedit_char_whitelist:""}); }catch(e){}
+  return res;
 }
 async function preprocessShot(file){
   let bmp;
@@ -1412,7 +1512,7 @@ async function preprocessShot(file){
     for(let x=x0;x<x1;x++){ const v=wipe?255:gray[y*w+x]; const k=(y*sw+(x-x0))*4; sd[k]=sd[k+1]=sd[k+2]=v; sd[k+3]=255; }
   }
   sctx.putImageData(simg,0,0);
-  return {full:c, strip:sc};
+  return {full:c, strip:sc, w, h};
 }
 let tessP=null;
 function loadTesseract(){
@@ -1449,27 +1549,31 @@ async function ocrRun(files, defDate){
       const pre=await preprocessShot(files[i]);
       await worker.setParameters({tessedit_pageseg_mode:"3"});
       const r1=await worker.recognize(pre.full);
+      const l1=ocrLines(r1.data);
       await worker.setParameters({tessedit_pageseg_mode:"4"});
       const r2=await worker.recognize(pre.strip);
-      const merged=combineOcr(ocrLines(r1.data), ocrLines(r2.data));
-      shots.push(parseStatsShot(merged, defDate));
+      const hdr=await readHeader(worker, pre, l1);
+      const merged=combineOcr(l1, ocrLines(r2.data));
+      shots.push(parseStatsShot(merged, defDate, hdr));
     }
     await worker.terminate(); worker=null;
     const days=mergeShots(shots);
     if(!days.length || !days.some(d=>d.stops.length||d.km!=null)){ out.innerHTML=`<p class="small" style="color:var(--bad)">Je n'ai rien reconnu. Vérifie que ce sont bien des captures de l'onglet Stats, bien nettes.</p>`; go.disabled=false; return; }
     const uniq=new Map(); days.forEach(d=>d.stops.forEach(s=>{ const k=s.addr+"|"+(s.trunc?1:0); if(!uniq.has(k)) uniq.set(k,{addr:s.addr,trunc:s.trunc}); }));
+    days.forEach(d=>{ if(d.km==null && d.stops.length){ const legs=d.stops.reduce((a,s)=>a+(s.km||0),0); if(legs>0){ d.km=Math.round(legs); d.kmGuess=true; } } });
     const items=[...uniq.entries()]; let done=0;
     say(`Vérification des adresses… 0 / ${items.length}`);
     const geo={}, queue=[...items];
-    await Promise.all([0,1,2].map(async()=>{ while(queue.length){ const [k,v]=queue.shift(); geo[k]=await resolveAddress(v.addr,v.trunc); done++; say(`Vérification des adresses… ${done} / ${items.length}`); } }));
+    await Promise.all([0,1,2].map(async()=>{ while(queue.length){ const [k,v]=queue.shift(); geo[k]=await resolveAddress(v.addr); done++; say(`Vérification des adresses… ${done} / ${items.length}`); } }));
     const times=new Set(allKeys().flatMap(k=>normMonth(months[k]).stops.map(x=>x.d+"|"+x.t)));
-    pend=days.map(d=>({d:d.d, km:d.km, pts:d.pts, stops:d.stops.map(st=>{
+    pend=days.map(d=>({d:d.d, km:d.km, kmGuess:!!d.kmGuess, pts:d.pts, stops:d.stops.map(st=>{
       const g=geo[st.addr+"|"+(st.trunc?1:0)]||{st:"offline",cands:[]};
       const loc=localGeo(st.addr);
-      const s={d:d.d, t:st.t, km:st.km||0, raw:st.addr, trunc:st.trunc, addr:st.addr, cp:loc.cp, city:loc.city, lat:null, lng:null, st:g.st, cands:g.cands||[]};
+      const s={d:d.d, t:st.t, km:st.km||0, raw:st.addr, trunc:st.trunc, addr:st.addr, cp:loc.cp, city:loc.city, lat:null, lng:null, st:g.st, cands:(g.cands||[]).map(x=>({...x}))};
       if(g.st==="ok") applyPlace(s,g.pick);
       s.dup=times.has(d.d+"|"+st.t); s.keep=!s.dup; return s;
     })}));
+    refineByRoute(pend);
     impReview();
   }catch(e){
     if(worker) try{ await worker.terminate(); }catch(_){}
