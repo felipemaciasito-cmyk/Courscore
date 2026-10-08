@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Courscore</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -421,6 +421,46 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
   #splash.go,#splash.go *{animation:none!important}
   #splash.go{opacity:0;transition:opacity .4s ease}
 }
+
+.topctl{display:flex;align-items:center;gap:8px}
+#modeSeg button{padding:7px 11px;font-size:.82rem}
+
+/* ===== en-tête : précédent / suivant ===== */
+#histSeg button{padding:6px 8px;display:grid;place-items:center;line-height:0}
+#histSeg button:disabled{opacity:.3;cursor:default}
+.topctl{gap:6px}
+#modeSeg button{padding:7px 9px}
+header.top h1{min-width:0}
+/* ===== pas de zoom, défilement vertical uniquement ===== */
+html,body{touch-action:pan-y;overscroll-behavior-x:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
+input,select,textarea{font-size:16px!important}
+/* ===== frise glissante ===== */
+.tlwrap{position:relative;margin:12px -16px 0}
+.strip{position:relative;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;padding:6px calc(50% - 26px) 4px;scrollbar-width:none;touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent)}
+.strip::-webkit-scrollbar{display:none}
+.strip .dbtn{flex:0 0 52px;min-width:52px;scroll-snap-align:center;scroll-snap-stop:normal}
+.strip .dbtn::before{content:"";position:absolute;left:0;right:0;top:calc(1.05rem + 25px);height:1px;background:var(--line);z-index:-1}
+.strip .dbtn .c{transition:transform .25s ease,box-shadow .3s ease,background .25s ease}
+.tlring{position:absolute;left:50%;width:52px;height:52px;margin-left:-26px;border-radius:50%;border:1.5px solid var(--accent);opacity:.75;pointer-events:none;z-index:3}
+.strip .dbtn.sel .c{transform:scale(1.12);box-shadow:0 0 0 2px var(--surface),0 0 16px 3px color-mix(in srgb,var(--accent) 55%,transparent)!important}
+.strip .dbtn.sel.off .c{opacity:.85;box-shadow:0 0 14px 2px color-mix(in srgb,var(--muted) 45%,transparent)!important}
+.strip .dbtn.sel>span:first-child{color:var(--ink);opacity:1}
+:root[data-skin="onyx"] .tlring{border-color:#CDAE72;border-width:1px}
+:root[data-skin="onyx"] .strip .dbtn.sel .c{box-shadow:0 0 0 2px #101012,0 0 22px 4px rgba(205,174,114,.55)!important}
+:root[data-skin="studio"] .tlring{border-color:#0D1218}
+@keyframes revealIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.reveal{animation:revealIn .35s ease both}
+@media (prefers-reduced-motion:reduce){.reveal{animation:none}.strip .dbtn .c{transition:none}}
+/* ===== carte zoomable ===== */
+#map{touch-action:none;user-select:none;-webkit-user-select:none}
+#map svg{touch-action:none;cursor:grab}
+#map svg:active{cursor:grabbing}
+.mapctl{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.mapctl button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 88%,transparent);color:var(--ink);font:600 1.05rem var(--f-ui);cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#map .dot{opacity:0;transition:opacity .25s ease;pointer-events:none}
+#map svg.zin .dot{opacity:1}
+#map svg.zin circle.bub{fill-opacity:.18}
 </style>
 </head>
 <body>
@@ -436,7 +476,7 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
 <main>
   <header class="top">
     <h1>Courscore<small id="sub">Chargement…</small></h1>
-    <button class="iconbtn" id="btnSettings" aria-label="Réglages">⚙︎</button>
+    <div class="topctl"><div class="seg" id="histSeg" role="group" aria-label="Navigation"><button id="hBack" aria-label="Précédent" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button id="hFwd" aria-label="Suivant" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div><div class="seg" id="modeSeg" role="group" aria-label="Affichage des montants"><button data-m="brut">Brut</button><button data-m="net">Net</button></div><button class="iconbtn" id="btnSettings" aria-label="Réglages">⚙︎</button></div>
   </header>
   <div id="storeNote"></div>
 
@@ -445,9 +485,9 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
     <div class="block">
       <div class="weekhead">
         <span class="lbl" id="wkLabel"></span>
-        <div class="nav"><button id="wkToday" class="ghost" style="width:auto;padding:0 12px;font-size:.8rem" hidden>Aujourd'hui</button><button id="wkPrev" aria-label="Semaine précédente">‹</button><button id="wkNext" aria-label="Semaine suivante">›</button></div>
+        <div class="nav"><button id="wkToday" class="ghost" style="width:auto;padding:0 12px;font-size:.8rem;height:32px" hidden>Aujourd'hui</button></div>
       </div>
-      <div class="wk" id="wk"></div>
+      <div class="tlwrap"><div class="tlring" id="tlRing" aria-hidden="true"></div><div class="strip" id="wk" aria-label="Jours, fais glisser pour choisir"></div></div>
     </div>
     <div class="block">
       <div class="lbl" id="todayLabel"></div>
@@ -475,7 +515,6 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
     <div class="block">
       <div class="row" style="justify-content:space-between;align-items:center">
         <select id="monthSel" class="ghost" aria-label="Mois"></select>
-        <div class="seg" id="modeSeg"><button data-m="brut">Brut</button><button data-m="net">Net estimé</button></div>
       </div>
       <div class="amtrow"><div class="big num" id="mEur">0 €</div><div class="prime" id="mPrime"></div></div>
       <div class="muted small" id="mDetail"></div>
@@ -505,8 +544,8 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
       <div class="seg" id="mapRange"><button data-r="month">Ce mois</button><button data-r="all">Tout</button></div>
     </div>
     <div class="block" style="padding:8px">
-      <div class="mapwrap"><div id="map"></div><div class="maptip" id="mapTip" hidden></div></div>
-      <p class="small muted" style="margin:8px 4px 0">Carte schématique. Chaque cercle regroupe les livraisons d'un code postal ; la position vient d'une estimation de l'adresse, donc approximative.</p>
+      <div class="mapwrap"><div id="map"></div><div class="mapctl"><button id="mzIn" aria-label="Zoomer">+</button><button id="mzOut" aria-label="Dézoomer">−</button><button id="mzReset" aria-label="Recentrer">⟲</button></div><div class="maptip" id="mapTip" hidden></div></div>
+      <p class="small muted" style="margin:8px 4px 0">Pince ou double-touche pour zoomer, glisse pour te déplacer. Chaque cercle regroupe les livraisons d'un code postal ; en zoomant, chaque livraison apparaît en point.</p>
     </div>
     <div class="block"><h2>Zones de livraison</h2><div id="zones"></div></div>
   </section>
@@ -608,11 +647,10 @@ html:root[data-skin] header.top h1{font-weight:800;letter-spacing:-.03em}
     <div class="row" id="sDays"></div>
     <h2 style="margin-top:16px">Objectifs mensuels (€)</h2>
     <label class="f">Séparés par des virgules<input id="sGoals"></label>
-    <label class="f">Les objectifs sont en<select id="sGoalMode"><option value="brut">Brut</option><option value="net">Net estimé</option></select></label>
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 6</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 8</p>
   </div>
 </dialog>
 
@@ -639,7 +677,6 @@ const DEFAULTS = {
 let S = {...DEFAULTS};
 // months["2026-10"] = { days: {"2026-10-01":{km,pts}}, stops: [{id,d,t,km,addr,cp,city,lat,lng}] }
 let months = {};
-let viewMode = "brut";
 let selMonth = monthKey(isoDate(new Date()));
 let statRange = "month", mapView = "paris", mapRange = "month";
 
@@ -682,7 +719,8 @@ function primeStatus(k){
   return {valid:abs.length===0, abs};
 }
 const primeCounts = k => { const st=primeStatus(k); return !!(st && st.valid); };
-const toMode = (b, mode=viewMode) => mode==="net" ? b*S.netPct/100 : b;
+const ML = () => S.goalMode==="net"?"net":"brut";
+const toMode = (b, mode=S.goalMode) => mode==="net" ? b*S.netPct/100 : b;
 function kmPerPoint(){
   const m=monthDays(monthKey(isoDate(new Date()))), a=allDays();
   const src = sum(m,x=>x.pts)>50 ? m : a;
@@ -781,26 +819,42 @@ function animateNum(el, to, fmt){
   const step=t=>{ const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3); el.textContent=fmt(from+(to-from)*e); if(k<1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
 }
-function renderWeek(){
-  const today=isoDate(new Date()), mon=mondayOf(selDay);
-  const worked=new Set(allDays().filter(x=>x.pts>0||x.km>0||x.stops.length).map(x=>x.d));
-  const sun=addDays(mon,6), m1=dOf(mon), m2=dOf(sun);
-  const AB=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]; const sh=d=>`${d.getDate()} ${AB[d.getMonth()]}`;
-  $("#wkLabel").textContent = `${sh(m1)} – ${sh(m2)}`;
-  const L=["L","M","M","J","V","S","D"];
-  let h="";
-  for(let i=0;i<7;i++){
-    const d=addDays(mon,i), fut=d>today, w=worked.has(d);
-    const off = !w && (!S.workDays.includes(dOf(d).getDay()) || d<today);
-    h+=`<button class="dbtn ${w?"worked":""} ${off?"off":""} ${d===selDay?"sel":""}" data-day="${d}" ${fut?"disabled":""} aria-label="${dOf(d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}">
-      <span>${L[i]}</span><span class="c">${dOf(d).getDate()}</span><span class="tg">${d===today?"AUJ":""}</span></button>`;
-  }
-  $("#wk").innerHTML=h;
-  $$("#wk .dbtn").forEach(b=>b.onclick=()=>{ selDay=b.dataset.day; renderWeek(); renderJour(); });
-  $("#wkNext").disabled = addDays(mon,7) > today;
-  $("#wkToday").hidden = selDay===today;
+function stripRange(){
+  const today=isoDate(new Date()), ds=allDays();
+  let start=addDays(today,-120); if(ds.length && ds[0].d<start) start=ds[0].d;
+  return {start,today};
 }
-function renderJour(){
+let stripSig="", stripTimer=null;
+const STRIP_W=52;
+function stripIndexOf(d){ return Math.round((dOf(d)-dOf(stripRange().start))/864e5); }
+function renderWeek(){
+  const strip=$("#wk"), {start,today}=stripRange();
+  const worked=new Set(allDays().filter(x=>x.pts>0||x.km>0||x.stops.length).map(x=>x.d));
+  const sig=start+"|"+today+"|"+[...worked].join(",")+"|"+S.workDays.join("");
+  if(sig!==stripSig){
+    const L=["D","L","M","M","J","V","S"]; let h="", d=start;
+    while(d<=today){
+      const wd=dOf(d).getDay(), w=worked.has(d), off=!w && (!S.workDays.includes(wd) || d<today);
+      h+=`<button class="dbtn ${w?"worked":""} ${off?"off":""}" data-day="${d}" aria-label="${dOf(d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}"><span>${L[wd]}</span><span class="c">${dOf(d).getDate()}</span><span class="tg">${d===today?"AUJ":""}</span></button>`;
+      d=addDays(d,1);
+    }
+    strip.innerHTML=h; stripSig=sig;
+    $$("#wk .dbtn").forEach(b=>b.onclick=()=>centerOn(b.dataset.day,true));
+  }
+  positionRing();
+  markSel(selDay); stripLabel();
+  centerOn(selDay,false);
+}
+function stripVisible(){ const st=$("#wk"); return !!(st.offsetParent && st.clientWidth>0); }
+function positionRing(){ if(!stripVisible()) return; const c=$("#wk .c"); if(!c) return; const wr=$(".tlwrap").getBoundingClientRect(), cr=c.getBoundingClientRect(); $("#tlRing").style.top=(cr.top-wr.top+cr.height/2-26)+"px"; }
+function markSel(d){ $$("#wk .dbtn.sel").forEach(b=>b.classList.remove("sel")); const el=$(`#wk [data-day="${d}"]`); if(el) el.classList.add("sel"); }
+function stripLabel(){ const sd=dOf(selDay); $("#wkLabel").textContent=`${MONTHS[sd.getMonth()]} ${sd.getFullYear()}`; $("#wkToday").hidden = selDay===isoDate(new Date()); }
+function centerOn(d,smooth){ const strip=$("#wk"); if(!stripVisible()) return; const i=stripIndexOf(d); if(i<0) return; strip.scrollTo({left:i*STRIP_W, behavior:smooth&&!reduceMotion?"smooth":"auto"}); if(!smooth||reduceMotion) setTimeout(()=>settleStrip(),0); }
+function stripNearest(){ const strip=$("#wk"), n=strip.children.length; if(!n) return null; const i=Math.max(0,Math.min(n-1,Math.round(strip.scrollLeft/STRIP_W))); return strip.children[i].dataset.day; }
+function settleStrip(){ if(!stripVisible()) return; const d=stripNearest(); if(!d) return; markSel(d); if(d!==selDay){ selDay=d; stripLabel(); renderJour(true); navPush(); } }
+$("#wk").addEventListener("scroll",()=>{ const d=stripNearest(); if(d) markSel(d); clearTimeout(stripTimer); stripTimer=setTimeout(settleStrip,130); },{passive:true});
+if("onscrollend" in window) $("#wk").addEventListener("scrollend",()=>{ clearTimeout(stripTimer); settleStrip(); });
+function renderJour(reveal){
   const now=new Date(), today=isoDate(now), isToday=selDay===today, sd=dOf(selDay), k=monthKey(selDay);
   const md=monthDays(k), td=md.find(x=>x.d===selDay) || {km:0,pts:0,stops:[],hasTot:false};
   const P=sum(md,x=>x.pts);
@@ -835,10 +889,9 @@ function renderJour(){
   $("#dayStops").innerHTML = td.stops.length
     ? `<div class="tl">${td.stops.map(s=>`<div class="st"><span class="tm">${esc(s.t||"--:--")}</span><span class="dt"></span><span class="ad" title="${esc(s.addr)}">${esc(s.addr||s.cp||"—")}</span><span class="km">${s.km?n1(s.km)+" km":""}</span></div>`).join("")}</div>`
     : `<p class="muted small" style="margin:0">${td.hasTot?"Seuls les totaux ont été saisis pour ce jour.":"Aucune livraison enregistrée ce jour-là."}</p>`;
+  if(reveal) $$("#p-jour .block").forEach((b,i)=>{ if(i===0) return; b.classList.remove("reveal"); void b.offsetWidth; b.classList.add("reveal"); });
 }
-$("#wkPrev").onclick=()=>{ selDay=addDays(selDay,-7); renderWeek(); renderJour(); };
-$("#wkNext").onclick=()=>{ const t=isoDate(new Date()); let d=addDays(selDay,7); if(d>t) d=t; selDay=d; renderWeek(); renderJour(); };
-$("#wkToday").onclick=()=>{ selDay=isoDate(new Date()); renderWeek(); renderJour(); };
+$("#wkToday").onclick=()=>centerOn(isoDate(new Date()),true);
 
 /* ---------- Mois ---------- */
 const BIKE_SVG=`<svg viewBox="0 0 68 40" width="58" height="34" aria-hidden="true">
@@ -855,7 +908,6 @@ const BIKE_SVG=`<svg viewBox="0 0 68 40" width="58" height="34" aria-hidden="tru
 function renderMois(){
   const keys=[...new Set([...allKeys(), monthKey(isoDate(new Date()))])].sort().reverse();
   $("#monthSel").innerHTML = keys.map(k=>{const [y,m]=k.split("-");return `<option value="${k}" ${k===selMonth?"selected":""}>${MONTHS[+m-1]} ${y}</option>`}).join("");
-  $$("#modeSeg button").forEach(b=>b.classList.toggle("on",b.dataset.m===viewMode));
   const md=monthDays(), P=sum(md,x=>x.pts), K=sum(md,x=>x.km);
   $("#mEur").textContent = eur(toMode(brut(P,K)));
   const ps=primeStatus(selMonth), pe=$("#mPrime");
@@ -867,7 +919,7 @@ function renderMois(){
     pe.className="prime "+(ps.valid?"ok":"lost");
     pe.innerHTML=`<span class="pv">+${eur(toMode(S.prime))} de prime</span>`; pe.title=why;
   }
-  $("#mDetail").innerHTML = `${n1(P)} pts × ${fr(rate(P))} € + ${n1(K)} km × ${fr(S.km)} €${viewMode==="net"?`. Net ≈ ${S.netPct} % du brut`:""}`;
+  $("#mDetail").innerHTML = `${n1(P)} pts × ${fr(rate(P))} € + ${n1(K)} km × ${fr(S.km)} €${S.goalMode==="net"?`. Montant net estimé à ${S.netPct} % du brut`:""}`;
   const max=Math.max(S.t2*1.25, P*1.05, 1), road=$("#road");
   road.querySelectorAll(".tick,.bike").forEach(e=>e.remove());
   [[S.t1,`${S.t1} pts`,"l"],[S.t2,`${S.t2} pts`,"r"]].forEach(([v,l,side])=>{
@@ -948,11 +1000,11 @@ function renderStats(){
     [nStops?n1(nStops/withStops.length):"–","livraisons / jour"],
     [n1(P/ds.length),"points / jour"],
     [n1(K/ds.length),"km / jour"],
-    [eur(eurDay),"brut / jour"],
-    [eurStop!=null?eur(eurStop,2):"–","brut / livraison"],
-    [eurHour!=null?eur(eurHour):"–","brut / heure*"]
+    [eur(toMode(eurDay)),`${ML()} / jour`],
+    [eurStop!=null?eur(toMode(eurStop),2):"–",`${ML()} / livraison`],
+    [eurHour!=null?eur(toMode(eurHour)):"–",`${ML()} / heure*`]
   ].map(([v,l])=>`<div class="kpi"><div class="num">${v}</div><span>${l}</span></div>`).join("")+
-  `<p class="small muted" style="grid-column:1/-1;margin:4px 0 0">${pl(ds.length,"jour")} travaillé${ds.length>1?"s":""}. Montants au prix du point actuel (${fr(r)} €). *Heure estimée entre la première et la dernière livraison de la journée${ampH?` (${n1(ampH)} h en moyenne)`:""} : le temps avant le premier enlèvement n'est pas compté.</p>`;
+  `<p class="small muted" style="grid-column:1/-1;margin:4px 0 0">${pl(ds.length,"jour")} travaillé${ds.length>1?"s":""}. Montants ${S.goalMode==="net"?"nets estimés":"bruts"}, au prix du point actuel (${fr(r)} €). *Heure estimée entre la première et la dernière livraison de la journée${ampH?` (${n1(ampH)} h en moyenne)`:""} : le temps avant le premier enlèvement n'est pas compté.</p>`;
   const stops=withStops.flatMap(x=>x.stops), nd=withStops.length||1;
   const hours=[...Array(18)].map((_,i)=>i+6);
   barChart($("#chHour"), hours.map(h=>h+"h"), hours.map(h=>stops.filter(s=>parseInt(s.t)===h).length/nd), v=>n1(v), 3);
@@ -999,19 +1051,56 @@ function renderCarte(){
   const poly=a=>a.map(([la,lo])=>`${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join(" ");
   const maxN=Math.max(1,...pts.map(p=>p.n)), k=mapView==="idf"?26:34;
   let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Carte des zones de livraison">
-  <polygon points="${poly(PARIS_OUTLINE)}" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
-  <polyline points="${poly(SEINE)}" fill="none" stroke="var(--accent-soft)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`;
-  Object.entries(PARIS_CP).forEach(([cp,[la,lo]])=>{ if(cp!=="75116") s+=`<text x="${X(lo)}" y="${Y(la)+4}" text-anchor="middle" style="font:600 11px 'Barlow Condensed',sans-serif;fill:var(--muted);opacity:.6">${+cp.slice(3)}</text>`; });
+  <polygon points="${poly(PARIS_OUTLINE)}" fill="var(--surface)" stroke="var(--line)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  <polyline points="${poly(SEINE)}" fill="none" stroke="var(--accent-soft)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  Object.entries(PARIS_CP).forEach(([cp,[la,lo]])=>{ if(cp!=="75116") s+=`<text class="arr" x="${X(lo)}" y="${Y(la)}" dy=".35em" text-anchor="middle" style="font-family:var(--f-num);font-weight:600;fill:var(--muted);opacity:.6" font-size="11">${+cp.slice(3)}</text>`; });
   pts.forEach((p,i)=>{
     const r=6+Math.sqrt(p.n/maxN)*k, c=i<3?"var(--amber)":"var(--accent)";
-    s+=`<circle data-z="${zs.indexOf(p)}" cx="${X(p.lng)}" cy="${Y(p.lat)}" r="${r}" fill="${c}" fill-opacity=".55" stroke="${c}" stroke-width="1.5" style="cursor:pointer"/>`;
+    s+=`<circle class="bub" data-z="${zs.indexOf(p)}" data-r="${r}" cx="${X(p.lng)}" cy="${Y(p.lat)}" r="${r}" fill="${c}" fill-opacity=".55" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`;
   });
+  stops.filter(x=>x.lat!=null&&x.lng!=null).forEach(x=>{ s+=`<circle class="dot" data-r="3.2" cx="${X(x.lng).toFixed(1)}" cy="${Y(x.lat).toFixed(1)}" r="3.2" fill="var(--ink)" stroke="var(--surface)" stroke-width="1" vector-effect="non-scaling-stroke"/>`; });
   s+="</svg>";
   $("#map").innerHTML = stops.length ? s : `<div class="empty">Pas encore de livraisons à placer.</div>`;
+  $(".mapctl").hidden=!stops.length;
   $("#mapTip").hidden=true;
-  $$("#map circle").forEach(c=>c.addEventListener("click",()=>{const z=zs[+c.dataset.z], t=$("#mapTip"); t.hidden=false; t.innerHTML=`<b>${esc(zoneName(z))}</b> : ${pl(z.n,"livraison")}`;}));
+  const svg=$("#map svg");
+  if(svg) setupMapZoom(svg,W,H);
+  $$("#map circle.bub").forEach(c=>c.addEventListener("click",()=>{ if(svg && svg._moved && svg._moved()>8) return; const z=zs[+c.dataset.z], t=$("#mapTip"); t.hidden=false; t.innerHTML=`<b>${esc(zoneName(z))}</b> : ${pl(z.n,"livraison")}`;}));
   const tot=stops.length||1;
   $("#zones").innerHTML = zs.length ? zs.slice(0,15).map(z=>`<div class="zone"><span>${esc(zoneName(z))}</span><span class="muted">${Math.round(z.n/tot*100)} %</span><b>${z.n}</b></div>`).join("") + (zs.some(z=>z.lat==null)?`<p class="small muted">Certaines zones n'ont pas pu être placées sur la carte.</p>`:"") : `<div class="empty">Rien pour l'instant.</div>`;
+}
+// zoom et déplacement de la carte (pincer, glisser, double-toucher, molette, boutons)
+function setupMapZoom(svg,W,H){
+  let vb={x:0,y:0,w:W,h:H}; const minW=W/10;
+  const bubs=[...svg.querySelectorAll("circle.bub")], dots=[...svg.querySelectorAll("circle.dot")], arrs=[...svg.querySelectorAll("text.arr")];
+  const apply=()=>{
+    svg.setAttribute("viewBox",`${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`);
+    const z=W/vb.w;
+    bubs.forEach(c=>c.setAttribute("r",(+c.dataset.r/Math.pow(z,.75)).toFixed(2)));
+    dots.forEach(c=>c.setAttribute("r",(+c.dataset.r/z*1.4).toFixed(2)));
+    arrs.forEach(t=>t.setAttribute("font-size",(11/Math.pow(z,.85)).toFixed(2)));
+    svg.classList.toggle("zin",z>=2.2);
+  };
+  const clamp=()=>{ vb.w=Math.min(W,Math.max(minW,vb.w)); vb.h=vb.w*H/W; vb.x=Math.min(W-vb.w,Math.max(0,vb.x)); vb.y=Math.min(H-vb.h,Math.max(0,vb.y)); };
+  const toSvg=(cx,cy)=>{ const r=svg.getBoundingClientRect(); return {x:vb.x+(cx-r.left)/r.width*vb.w, y:vb.y+(cy-r.top)/r.height*vb.h}; };
+  const zoomAt=(cx,cy,f)=>{ const p=toSvg(cx,cy), nw=Math.min(W,Math.max(minW,vb.w/f)), k=nw/vb.w; vb.x=p.x-(p.x-vb.x)*k; vb.y=p.y-(p.y-vb.y)*k; vb.w=nw; vb.h=nw*H/W; clamp(); apply(); };
+  const zoomCenter=f=>{ const r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,f); };
+  const ptrs=new Map(); let moved=0, pinchD=0, lastTap=0;
+  svg._moved=()=>moved;
+  svg.addEventListener("pointerdown",e=>{ try{svg.setPointerCapture(e.pointerId);}catch(_){} ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(ptrs.size===1) moved=0; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinchD=Math.hypot(a.x-b.x,a.y-b.y); } });
+  svg.addEventListener("pointermove",e=>{
+    if(!ptrs.has(e.pointerId)) return; e.preventDefault();
+    const prev=ptrs.get(e.pointerId), cur={x:e.clientX,y:e.clientY}; ptrs.set(e.pointerId,cur);
+    if(ptrs.size===1){ const r=svg.getBoundingClientRect(); vb.x-=(cur.x-prev.x)/r.width*vb.w; vb.y-=(cur.y-prev.y)/r.height*vb.h; moved+=Math.abs(cur.x-prev.x)+Math.abs(cur.y-prev.y); clamp(); apply(); }
+    else if(ptrs.size===2){ const [a,b]=[...ptrs.values()], d=Math.hypot(a.x-b.x,a.y-b.y); if(pinchD>0) zoomAt((a.x+b.x)/2,(a.y+b.y)/2,d/pinchD); pinchD=d; moved+=20; }
+  });
+  const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinchD=0;
+    if(e.type==="pointerup" && ptrs.size===0 && moved<8){ const now=Date.now(); if(now-lastTap<300){ zoomAt(e.clientX,e.clientY,2.2); lastTap=0; } else lastTap=now; } };
+  svg.addEventListener("pointerup",up); svg.addEventListener("pointercancel",up);
+  svg.addEventListener("wheel",e=>{ e.preventDefault(); zoomAt(e.clientX,e.clientY,e.deltaY<0?1.18:1/1.18); },{passive:false});
+  $("#mzIn").onclick=()=>zoomCenter(1.6); $("#mzOut").onclick=()=>zoomCenter(1/1.6);
+  $("#mzReset").onclick=()=>{ vb={x:0,y:0,w:W,h:H}; apply(); };
+  apply();
 }
 
 /* ---------- Missions ---------- */
@@ -1035,6 +1124,7 @@ function renderMissions(){
 }
 
 function renderAll(){
+  $$("#modeSeg button").forEach(b=>{ const on=b.dataset.m===S.goalMode; b.classList.toggle("on",on); b.setAttribute("aria-pressed",on); });
   const ds=allDays();
   $("#sub").textContent = ds.length ? `${pl(ds.length,"journée")} enregistrée${ds.length>1?"s":""}` : "Aucune journée pour l'instant";
   renderWeek(); renderJour(); renderMois(); renderStats(); renderCarte(); renderMissions();
@@ -1612,7 +1702,7 @@ $("#stSave").onclick=()=>{
 function openSettings(){
   $("#sT1").value=S.t1; $("#sT2").value=S.t2; $("#sP0").value=S.p0; $("#sP1").value=S.p1; $("#sP2").value=S.p2;
   $("#sKm").value=S.km; $("#sPrime").value=S.prime; $("#sPrimeOn").value=S.primeOn?"1":"0"; $("#sNet").value=S.netPct;
-  $("#sGoals").value=S.goals.join(", "); $("#sGoalMode").value=S.goalMode; $("#sTheme").value=S.theme||""; renderSkins();
+  $("#sGoals").value=S.goals.join(", "); $("#sTheme").value=S.theme||""; renderSkins();
   $("#sDays").innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="ghost" style="padding:8px 10px"><input type="checkbox" value="${d}" ${S.workDays.includes(d)?"checked":""}> ${DAYS[d]}</label>`).join("");
   $("#dlgSet").showModal();
 }
@@ -1640,10 +1730,10 @@ $("#sSave").onclick=()=>{
   S={...S, t1:num("#sT1",S.t1), t2:num("#sT2",S.t2), p0:num("#sP0",S.p0), p1:num("#sP1",S.p1), p2:num("#sP2",S.p2),
     km:num("#sKm",S.km), prime:num("#sPrime",S.prime), primeOn:$("#sPrimeOn").value==="1", netPct:Math.min(100,Math.max(1,num("#sNet",S.netPct))),
     goals:$("#sGoals").value.split(/[,;\s]+/).map(x=>parseFloat(x)).filter(x=>x>0).sort((a,b)=>a-b),
-    goalMode:$("#sGoalMode").value, theme:$("#sTheme").value, workDays:$$("#sDays input:checked").map(i=>+i.value)};
+    theme:$("#sTheme").value, workDays:$$("#sDays input:checked").map(i=>+i.value)};
   if(!S.goals.length) S.goals=[...DEFAULTS.goals];
   if(!S.workDays.length) S.workDays=[...DEFAULTS.workDays];
-  viewMode=S.goalMode; applyTheme(); saveSettings(); $("#dlgSet").close(); renderAll();
+  applyTheme(); saveSettings(); $("#dlgSet").close(); renderAll();
 };
 
 /* ---------- export / restore ---------- */
@@ -1689,12 +1779,42 @@ $("#aSave").onclick=()=>{
 };
 
 /* ---------- wiring ---------- */
-$$("nav.tabbar button").forEach(b=>b.onclick=()=>{
-  $$("nav.tabbar button").forEach(x=>x.classList.toggle("on",x===b));
-  $$("section.panel").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
+/* ---------- onglets + historique précédent / suivant ---------- */
+let curTab="jour";
+const hist=[]; let hIdx=-1, hApplying=false;
+function showTab(name){
+  curTab=name;
+  $$("nav.tabbar button").forEach(x=>x.classList.toggle("on",x.dataset.p===name));
+  $$("section.panel").forEach(p=>p.classList.toggle("on",p.id==="p-"+name));
   window.scrollTo(0,0);
-});
-$$("#modeSeg button").forEach(b=>b.onclick=()=>{viewMode=b.dataset.m;renderMois();});
+  if(name==="jour") requestAnimationFrame(()=>{ positionRing(); centerOn(selDay,false); });
+}
+function navBtns(){ $("#hBack").disabled=hIdx<=0; $("#hFwd").disabled=hIdx>=hist.length-1; }
+function navPush(){
+  if(hApplying) return;
+  const st={tab:curTab, day:selDay}, cur=hist[hIdx];
+  if(cur && cur.tab===st.tab && cur.day===st.day) return;
+  hist.splice(hIdx+1); hist.push(st); if(hist.length>80) hist.shift(); hIdx=hist.length-1; navBtns();
+}
+function navGo(delta){
+  const n=hIdx+delta; if(n<0||n>=hist.length) return;
+  hIdx=n; const st=hist[n]; hApplying=true;
+  if(st.day!==selDay){ selDay=st.day; markSel(selDay); stripLabel(); renderJour(true); }
+  showTab(st.tab);
+  if(st.tab==="jour") centerOn(selDay,false);
+  hApplying=false; navBtns();
+}
+$$("nav.tabbar button").forEach(b=>b.onclick=()=>{ if(b.dataset.p===curTab) { window.scrollTo(0,0); return; } showTab(b.dataset.p); navPush(); });
+$("#hBack").onclick=()=>navGo(-1);
+$("#hFwd").onclick=()=>navGo(1);
+
+/* ---------- pas de zoom dans l'appli (sauf la carte) ---------- */
+["gesturestart","gesturechange","gestureend"].forEach(ev=>document.addEventListener(ev,e=>{ if(!(e.target.closest&&e.target.closest("#map"))) e.preventDefault(); },{passive:false}));
+document.addEventListener("touchmove",e=>{ if(e.touches.length>1 && !(e.target.closest&&e.target.closest("#map"))) e.preventDefault(); },{passive:false});
+let lastTouchEnd=0;
+document.addEventListener("touchend",e=>{ const now=Date.now(); if(now-lastTouchEnd<300 && !(e.target.closest&&e.target.closest("#map,input,textarea,select"))) e.preventDefault(); lastTouchEnd=now; },{passive:false});
+
+$$("#modeSeg button").forEach(b=>b.onclick=()=>{ if(S.goalMode===b.dataset.m) return; S.goalMode=b.dataset.m; saveSettings(); renderAll(); });
 $$("#rangeSeg button").forEach(b=>b.onclick=()=>{statRange=b.dataset.r;renderStats();});
 $$("#mapSeg button").forEach(b=>b.onclick=()=>{mapView=b.dataset.v;renderCarte();});
 $$("#mapRange button").forEach(b=>b.onclick=()=>{mapRange=b.dataset.r;renderCarte();});
@@ -1753,7 +1873,7 @@ $$("[data-close]").forEach(b=>b.onclick=()=>{ if(impCtl) impCtl.abort(); b.close
   el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" ") start(e); });
 })();
 
-lsLoad(); viewMode=S.goalMode; applyTheme(); renderAll();
+lsLoad(); applyTheme(); renderAll(); navPush();
 initDb(); samplePromise = initSample();
 if("serviceWorker" in navigator && location.protocol==="https:"){ navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{}); }
 })();
