@@ -464,6 +464,26 @@ input,select,textarea{font-size:16px!important}
 #map .dot{opacity:0;transition:opacity .25s ease;pointer-events:none}
 #map svg.zin .dot{opacity:1}
 #map svg.zin circle.bub{fill-opacity:.18}
+
+/* ===== menu Captures ===== */
+.capmenu{position:fixed;right:16px;bottom:calc(140px + env(safe-area-inset-bottom,0px));z-index:7;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:18px;background:var(--surface);border:1px solid var(--card-bd,var(--line));box-shadow:0 18px 40px -16px rgba(0,0,0,.45);animation:revealIn .18s ease both}
+.capmenu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;min-width:220px;border:0;border-radius:12px;padding:11px 14px;background:var(--surface2);color:var(--ink);font:500 1rem var(--f-ui);cursor:pointer}
+.capmenu button span{font-size:.78rem;color:var(--muted)}
+.capmenu button:active{transform:scale(.98)}
+/* ===== météo ===== */
+.wxcard{display:flex;align-items:center;gap:12px;width:100%;text-align:left;color:var(--ink);font:inherit;cursor:pointer;min-height:76px}
+.wxcard .wx-ic{flex:0 0 auto;color:var(--ink);line-height:0}
+.wxcard .wx-main{flex:1;min-width:0}
+.wxcard .wx-lab{font-weight:600;font-size:1rem}
+.wxcard .wx-side{text-align:right;flex:0 0 auto}
+.wxcard .wx-t{font-size:1.6rem;font-weight:600;line-height:1.1}
+.wxcard .wx-off{flex:1}
+.wxcard.wx-load{opacity:.55}
+.wxcard:active{transform:scale(.99)}
+.wxleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;color:var(--muted)}
+.wxleg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.wxpp{display:flex;align-items:flex-end;gap:2px;height:28px}
+.wxpp span{flex:1;background:var(--accent);border-radius:2px 2px 0 0}
 </style>
 </head>
 <body>
@@ -485,6 +505,7 @@ input,select,textarea{font-size:16px!important}
 
   <!-- JOUR -->
   <section class="panel on" id="p-jour">
+    <button type="button" class="block wxcard" id="wxCard" aria-label="Météo du jour sélectionné, toucher pour le détail heure par heure"></button>
     <div class="block">
       <div class="weekhead">
         <span class="lbl" id="wkLabel"></span>
@@ -549,12 +570,8 @@ input,select,textarea{font-size:16px!important}
     <div class="block" style="padding:8px">
       <div class="mapwrap"><div id="map"></div><div class="maptip" id="mapTip" hidden></div></div>
     </div>
-    <div class="block" id="pkBar" hidden>
-      <div class="row" style="gap:8px"><button class="main" id="pkImport" style="flex:1">＋ Captures d'enlèvement</button><button class="ghost" id="pkAdd">Saisir</button></div>
-      <p class="small muted" id="pkInfo" style="margin:8px 0 0"></p>
-    </div>
     <div class="block"><h2 id="zonesTitle">Zones de livraison</h2><div id="zones"></div></div>
-    <div class="block" id="pkListBlock" hidden><h2>Derniers enlèvements</h2><div id="pkList"></div></div>
+    <div class="block" id="pkListBlock" hidden><h2 style="justify-content:space-between">Derniers enlèvements <button class="ghost" id="pkAdd" style="padding:4px 10px;font-size:.8rem;letter-spacing:0;text-transform:none">+ Saisir</button></h2><p class="small muted" id="pkInfo" style="margin:-4px 0 8px"></p><div id="pkList"></div></div>
   </section>
 
   <!-- MISSIONS -->
@@ -568,7 +585,11 @@ input,select,textarea{font-size:16px!important}
   </section>
 </main>
 
-<button class="fab" id="btnImport">＋ Captures</button>
+<div class="capmenu" id="capMenu" hidden role="menu">
+  <button role="menuitem" data-cap="enl"><b>Enlèvements</b><span>Captures de l'onglet Mission</span></button>
+  <button role="menuitem" data-cap="liv"><b>Livraisons</b><span>Captures de l'onglet Stats</span></button>
+</div>
+<button class="fab" id="btnImport" aria-haspopup="menu" aria-expanded="false">＋ Captures</button>
 
 <nav class="tabbar"><div class="in">
   <button data-p="jour" class="on">Jour</button>
@@ -646,6 +667,12 @@ input,select,textarea{font-size:16px!important}
   </div>
 </dialog>
 
+<!-- Weather -->
+<dialog id="dlgWx">
+  <div class="dh"><h2 id="wxTitle">Météo</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
+  <div class="db" id="wxBody"></div>
+</dialog>
+
 <!-- Settings -->
 <dialog id="dlgSet">
   <div class="dh"><h2>Réglages</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
@@ -672,7 +699,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 14</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 15</p>
   </div>
 </dialog>
 
@@ -911,7 +938,8 @@ function renderJour(reveal){
   $("#dayStops").innerHTML = td.stops.length
     ? `<div class="tl">${td.stops.map(s=>`<div class="st"><span class="tm">${esc(s.t||"--:--")}</span><span class="dt"></span><span class="ad" title="${esc(s.addr)}">${esc(s.addr||s.cp||"—")}</span><span class="km">${s.km?n1(s.km)+" km":""}</span></div>`).join("")}</div>`
     : `<p class="muted small" style="margin:0">${td.hasTot?"Seuls les totaux ont été saisis pour ce jour.":"Aucune livraison enregistrée ce jour-là."}</p>`;
-  if(reveal) $$("#p-jour .block").forEach((b,i)=>{ if(i===0) return; b.classList.remove("reveal"); void b.offsetWidth; b.classList.add("reveal"); });
+  renderWeather();
+  if(reveal) $$("#p-jour .block").forEach((b,i)=>{ if(i<=1) return; b.classList.remove("reveal"); void b.offsetWidth; b.classList.add("reveal"); });
 }
 $("#wkToday").onclick=()=>centerOn(isoDate(new Date()),true);
 
@@ -1113,7 +1141,7 @@ function renderCarte(){
   $$("#mapRange button").forEach(b=>b.classList.toggle("on",b.dataset.r===mapRange));
   $$("#layerSeg button").forEach(b=>b.classList.toggle("on",b.dataset.l===mapLayer));
   const enl=mapLayer==="enl";
-  $("#pkBar").hidden=!enl; $("#pkListBlock").hidden=!enl;
+  $("#pkListBlock").hidden=!enl;
   $("#zonesTitle").textContent = enl ? "Zones d'enlèvement" : "Zones de livraison";
   const stops = enl ? pickupsIn(mapRange) : rangeDays(mapRange).flatMap(x=>x.stops);
   if(enl) renderPickups();
@@ -1797,8 +1825,8 @@ function renderPickups(){
   const all=allPickups().slice().sort((a,b)=>(b.d+(b.t||"")).localeCompare(a.d+(a.t||"")));
   const nDel=allKeys().reduce((a,k)=>a+normMonth(months[k]).stops.length,0);
   $("#pkInfo").textContent = all.length
-    ? `${pl(all.length,"enlèvement")} enregistré${all.length>1?"s":""}, pour ${pl(nDel,"livraison")}. C'est normal d'en avoir moins : ajoute-les quand tu y penses.`
-    : "Au moment de récupérer un colis, fais une capture de l'adresse d'enlèvement, puis ajoute-la ici.";
+    ? `${pl(all.length,"enlèvement")} enregistré${all.length>1?"s":""}, pour ${pl(nDel,"livraison")}. C'est normal d'en avoir moins.`
+    : "Au moment de récupérer un colis, fais une capture de l'onglet Mission, puis importe-la avec « ＋ Captures ».";
   $("#pkList").innerHTML = all.length ? all.slice(0,40).map(p=>{ const dt=dOf(p.d); return `<div class="mission"><span class="t">${esc(p.t||"--:--")}</span><span class="a" title="${esc(p.addr)}">${esc(p.addr||"—")}${p.dest?`<br><span class="small muted">→ ${esc(p.dest)}</span>`:""}</span><span class="small muted">${dt.getDate()} ${["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."][dt.getMonth()]}</span><span><button class="ed" aria-label="Modifier l'enlèvement" data-pked="${esc(p.id)}">✎</button><button aria-label="Supprimer l'enlèvement" data-pkdel="${esc(p.id)}">✕</button></span></div>`; }).join("") : `<p class="small muted" style="margin:0">Aucun pour l'instant.</p>`;
   $$("[data-pkdel]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>{ for(const k of allKeys()){ const m=M(k), i=m.pickups.findIndex(x=>x.id===b.dataset.pkdel); if(i>=0){ m.pickups.splice(i,1); saveMonth(k); renderCarte(); return; } } }));
   $$("[data-pked]").forEach(b=>b.onclick=()=>{ for(const k of allKeys()){ const p=M(k).pickups.find(x=>x.id===b.dataset.pked); if(p){ openPk(p); return; } } });
@@ -1955,9 +1983,107 @@ function pkReview(){
     savePickups(keep); $("#dlgImport").close(); showNote(`${pl(keep.length,"enlèvement")} ajouté${keep.length>1?"s":""}.`); setTimeout(()=>showNote(""),4000);
   };
 }
-$("#pkImport").onclick=async()=>{ await samplePromise; pkStartImport(); };
 $("#dlgImport").addEventListener("close",()=>{ $("#dlgImport").querySelector(".dh h2").textContent="Importer des captures Stats"; });
 
+/* ---------- météo (Open-Meteo, Paris) ---------- */
+const WX_LAT=48.8566, WX_LON=2.3522;
+const WMO={0:["Ciel dégagé","sun",0],1:["Peu nuageux","sunc",0],2:["Partiellement nuageux","sunc",0],3:["Couvert","cloud",0],45:["Brouillard","fog",1],48:["Brouillard givrant","fog",2],
+  51:["Bruine faible","drz",1],53:["Bruine modérée","drz",2],55:["Bruine dense","drz",3],56:["Bruine verglaçante faible","drz",3],57:["Bruine verglaçante dense","drz",4],
+  61:["Pluie faible","rain",2],63:["Pluie modérée","rain",3],65:["Pluie forte","rain2",4],66:["Pluie verglaçante faible","rain",4],67:["Pluie verglaçante forte","rain2",5],
+  71:["Neige faible","snow",3],73:["Neige modérée","snow",4],75:["Neige forte","snow",5],77:["Grains de neige","snow",3],
+  80:["Averses faibles","rain",2],81:["Averses modérées","rain",3],82:["Averses violentes","rain2",5],85:["Averses de neige faibles","snow",3],86:["Averses de neige fortes","snow",5],
+  95:["Orage","storm",5],96:["Orage avec grêle","storm",6],99:["Orage violent avec grêle","storm",6]};
+const wmo=c=>WMO[c]||["—","cloud",0];
+function wxIcon(kind,size=44){
+  const c="currentColor", a="var(--accent)";
+  const cloud=`<path d="M14 34h20a8 8 0 0 0 0-16 11 11 0 0 0-21-2A9 9 0 0 0 14 34z" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
+  const sun=(x,y,r)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${a}" stroke-width="2.2"/>`+[0,45,90,135,180,225,270,315].map(t=>{const q=t*Math.PI/180;return `<line x1="${x+Math.cos(q)*(r+3)}" y1="${y+Math.sin(q)*(r+3)}" x2="${x+Math.cos(q)*(r+6)}" y2="${y+Math.sin(q)*(r+6)}" stroke="${a}" stroke-width="2" stroke-linecap="round"/>`;}).join("");
+  const drops=(n,len)=>Array.from({length:n},(_,i)=>`<line x1="${17+i*7}" y1="38" x2="${15+i*7}" y2="${38+len}" stroke="${a}" stroke-width="2.2" stroke-linecap="round"/>`).join("");
+  const b={sun:sun(24,24,8), sunc:sun(30,16,6)+cloud, cloud:cloud, fog:cloud+`<line x1="12" y1="40" x2="38" y2="40" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".7"/><line x1="16" y1="45" x2="34" y2="45" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".5"/>`,
+    drz:cloud+drops(3,3), rain:cloud+drops(3,6), rain2:cloud+drops(4,8),
+    snow:cloud+[0,1,2].map(i=>`<circle cx="${18+i*7}" cy="${41+(i%2)*3}" r="1.8" fill="${a}"/>`).join(""),
+    storm:cloud+`<path d="M25 34l-4 7h5l-3 7" fill="none" stroke="${a}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`}[kind]||cloud;
+  return `<svg viewBox="0 0 48 52" width="${size}" height="${size}" aria-hidden="true">${b}</svg>`;
+}
+const wxCache={}; let wxRecent=null;
+async function wxFetch(url){ const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9000); try{ const r=await fetch(url,{signal:ctl.signal}); clearTimeout(to); if(!r.ok) return null; return await r.json(); }catch(e){ clearTimeout(to); return null; } }
+const HOURLY="temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m";
+async function getWx(day){
+  const today=isoDate(new Date());
+  if(day<addDays(today,-88)){
+    if(wxCache[day]) return wxCache[day];
+    const j=await wxFetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${WX_LAT}&longitude=${WX_LON}&start_date=${day}&end_date=${day}&hourly=${HOURLY}&timezone=Europe%2FParis&wind_speed_unit=kmh`);
+    if(!j||!j.hourly) return null;
+    return (wxCache[day]={hourly:j.hourly,current:null});
+  }
+  if(!wxRecent || Date.now()-wxRecent.at>20*60*1000){
+    const j=await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}&current=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&hourly=${HOURLY},precipitation_probability&past_days=92&forecast_days=2&timezone=Europe%2FParis&wind_speed_unit=kmh`);
+    if(!j||!j.hourly) return wxRecent ? wxRecent.data : null;
+    wxRecent={at:Date.now(), data:j};
+  }
+  return {hourly:wxRecent.data.hourly, current:day===today?wxRecent.data.current:null};
+}
+function wxDay(data,day){
+  const h=data.hourly, out=[];
+  h.time.forEach((t,i)=>{ if(t.startsWith(day)) out.push({h:+t.slice(11,13), t:h.temperature_2m[i], p:h.precipitation[i]||0, c:h.weather_code[i], w:h.wind_speed_10m[i], g:h.wind_gusts_10m?h.wind_gusts_10m[i]:null, pp:h.precipitation_probability?h.precipitation_probability[i]:null}); });
+  return out;
+}
+const rainLvl=p=>p<=0.05?0:p<2.5?1:p<7.6?2:3;
+const RAIN_TXT=["","faible","modérée","forte"];
+let wxReq=0;
+async function renderWeather(){
+  const el=$("#wxCard"), day=selDay, my=++wxReq;
+  if(window.claude){ el.innerHTML=`<div class="wx-off small muted">Météo disponible dans l'app Courscore installée.</div>`; return; }
+  if(!el.dataset.day || el.dataset.day!==day) el.classList.add("wx-load");
+  const data=await getWx(day);
+  if(my!==wxReq) return;
+  el.classList.remove("wx-load"); el.dataset.day=day;
+  if(!data){ el.innerHTML=`<div class="wx-off small muted">Météo indisponible (pas de connexion).</div>`; return; }
+  const hrs=wxDay(data,day); if(!hrs.length){ el.innerHTML=`<div class="wx-off small muted">Pas de météo pour ce jour.</div>`; return; }
+  const work=hrs.filter(x=>x.h>=7&&x.h<=21);
+  let code, temp, wind, gust, precip, sub;
+  if(data.current){
+    const cu=data.current; code=cu.weather_code; temp=cu.temperature_2m; wind=cu.wind_speed_10m; gust=cu.wind_gusts_10m;
+    const nowH=new Date().getHours(), next=hrs.filter(x=>x.h>=nowH&&x.h<nowH+6), mx=Math.max(0,...next.map(x=>x.p));
+    precip=cu.precipitation||0;
+    sub = mx>0.05 ? `Jusqu'à ${n1(mx)} mm/h d'ici 6 h` : "Sec dans les 6 h";
+  } else {
+    const worst=work.reduce((a,x)=>wmo(x.c)[2]>wmo(a.c)[2]?x:a,work[0]||hrs[0]);
+    code=worst.c; temp=null; wind=Math.max(...work.map(x=>x.w)); gust=Math.max(...work.map(x=>x.g||0))||null;
+    const tot=work.reduce((a,x)=>a+x.p,0), mx=Math.max(0,...work.map(x=>x.p));
+    precip=mx;
+    sub = tot>0.05 ? `${n1(tot)} mm de 7 h à 21 h, pic ${n1(mx)} mm/h` : "Sec de 7 h à 21 h";
+  }
+  const [lab,kind]=wmo(code), lv=rainLvl(precip);
+  const tTxt = temp!=null ? `${Math.round(temp)}°` : `${Math.round(Math.min(...hrs.map(x=>x.t)))}° / ${Math.round(Math.max(...hrs.map(x=>x.t)))}°`;
+  el.innerHTML=`<div class="wx-ic">${wxIcon(kind)}</div>
+    <div class="wx-main"><div class="wx-lab">${lab}${lv&&!/faible|modérée|forte|dense|violent/i.test(lab)?` · ${RAIN_TXT[lv]}`:""}</div><div class="wx-sub small muted">${sub}</div></div>
+    <div class="wx-side"><div class="wx-t num">${tTxt}</div><div class="small muted">💨 ${Math.round(wind)} km/h${gust?` · raf. ${Math.round(gust)}`:""}</div></div>`;
+  el.onclick=()=>openWxChart(day,hrs,!!data.current);
+}
+function openWxChart(day,hrs,isToday){
+  const sd=dOf(day), nowH=new Date().getHours();
+  $("#wxTitle").textContent=`Météo du ${sd.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}`;
+  const W=600,H=230,pl=34,pr=8,pt=40,pb=26, max=Math.max(1,...hrs.map(x=>x.p)), bw=(W-pl-pr)/24;
+  const Yp=v=>H-pb-(H-pb-pt)*v/max;
+  const col=["var(--line)","var(--accent)","var(--amber)","var(--bad)"];
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Précipitations heure par heure">`;
+  [0,max/2,max].forEach(v=>{ s+=`<line x1="${pl}" x2="${W-pr}" y1="${Yp(v)}" y2="${Yp(v)}" stroke="var(--line)" stroke-dasharray="3 4"/><text x="${pl-6}" y="${Yp(v)+4}" text-anchor="end">${n1(v)}</text>`; });
+  hrs.forEach(x=>{ const X=pl+x.h*bw, lv=rainLvl(x.p), y=Yp(x.p);
+    if(isToday&&x.h===nowH) s+=`<rect x="${X}" y="${pt-6}" width="${bw}" height="${H-pb-pt+6}" fill="var(--accent-soft)" opacity=".6"/>`;
+    if(x.p>0.05) s+=`<rect x="${X+bw*.15}" y="${y}" width="${bw*.7}" height="${H-pb-y}" rx="2" fill="${col[lv]}"><title>${x.h} h : ${n1(x.p)} mm/h</title></rect>`;
+    if(x.h%3===0){ s+=`<text x="${X+bw/2}" y="${H-8}" text-anchor="middle">${x.h}h</text>`;
+      s+=`<g transform="translate(${X+bw/2-9},2)" style="color:var(--ink)">${wxIcon(wmo(x.c)[1],18)}</g><text x="${X+bw/2}" y="${pt-6}" text-anchor="middle" style="fill:var(--ink)">${Math.round(x.t)}°</text>`; }
+  });
+  s+=`</svg>`;
+  const pp = isToday && hrs.some(x=>x.pp!=null) ? `<div class="small muted" style="margin:10px 0 4px">Probabilité de pluie</div><div class="wxpp">${hrs.map(x=>`<span title="${x.h} h : ${x.pp}%" style="opacity:${.25+.75*(x.pp||0)/100};height:${4+(x.pp||0)/100*22}px"></span>`).join("")}</div>`:"";
+  const mxw=hrs.reduce((a,x)=>x.w>a.w?x:a,hrs[0]);
+  $("#wxBody").innerHTML=`<div class="scroll">${s}</div>
+    <div class="wxleg small"><span><i style="background:var(--accent)"></i>faible (&lt; 2,5 mm/h)</span><span><i style="background:var(--amber)"></i>modérée (2,5 à 7,6)</span><span><i style="background:var(--bad)"></i>forte (&gt; 7,6)</span></div>
+    ${pp}
+    <p class="small muted" style="margin:10px 0 0">Vent le plus fort : ${Math.round(mxw.w)} km/h vers ${mxw.h} h${mxw.g?`, rafales jusqu'à ${Math.round(Math.max(...hrs.map(x=>x.g||0)))} km/h`:""}. Données Open-Meteo pour Paris.</p>`;
+  $("#dlgWx").showModal();
+}
 /* ---------- settings ---------- */
 function openSettings(){
   $("#sT1").value=S.t1; $("#sT2").value=S.t2; $("#sP0").value=S.p0; $("#sP1").value=S.p1; $("#sP2").value=S.p2;
@@ -2080,7 +2206,11 @@ $$("#rangeSeg button").forEach(b=>b.onclick=()=>{statRange=b.dataset.r;renderSta
 $$("#mapRange button").forEach(b=>b.onclick=()=>{mapRange=b.dataset.r;renderCarte();});
 $("#monthSel").onchange=e=>{selMonth=e.target.value;renderMois();};
 $("#btnSettings").onclick=openSettings;
-$("#btnImport").onclick=async()=>{ if(curTab==="carte" && mapLayer==="enl"){ await samplePromise; pkStartImport(); } else impStart(); };
+const capMenu=$("#capMenu");
+function capToggle(open){ capMenu.hidden=!open; $("#btnImport").setAttribute("aria-expanded",open); }
+$("#btnImport").onclick=e=>{ e.stopPropagation(); capToggle(capMenu.hidden); };
+$$("#capMenu [data-cap]").forEach(b=>b.onclick=async e=>{ e.stopPropagation(); capToggle(false); if(b.dataset.cap==="enl"){ await samplePromise; pkStartImport(); } else impStart(); });
+document.addEventListener("click",e=>{ if(!capMenu.hidden && !e.target.closest("#capMenu")) capToggle(false); });
 $$("[data-close]").forEach(b=>b.onclick=()=>{ if(impCtl) impCtl.abort(); b.closest("dialog").close(); });
 
 /* ---------- écran d'ouverture : animation + son ---------- */
