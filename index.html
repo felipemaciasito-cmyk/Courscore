@@ -498,6 +498,9 @@ input,select,textarea{font-size:16px!important}
 .wxd-g{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .wxd-g>div{display:flex;flex-direction:column;gap:1px}
 .wxd-g b{font-size:1.05rem}
+
+/* un élément masqué reste masqué, quel que soit son style */
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -713,7 +716,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 16</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 17</p>
   </div>
 </dialog>
 
