@@ -544,16 +544,14 @@ input,select,textarea{font-size:16px!important}
   <section class="panel" id="p-carte">
     <div class="block flat row" style="justify-content:space-between">
       <div class="seg" id="layerSeg" style="width:100%;display:flex"><button data-l="liv" style="flex:1">Livraisons</button><button data-l="enl" style="flex:1">Enlèvements</button></div>
-      <div class="seg" id="mapSeg"><button data-v="paris">Paris</button><button data-v="idf">Toute la zone</button></div>
       <div class="seg" id="mapRange"><button data-r="month">Ce mois</button><button data-r="all">Tout</button></div>
+    </div>
+    <div class="block" style="padding:8px">
+      <div class="mapwrap"><div id="map"></div><div class="maptip" id="mapTip" hidden></div></div>
     </div>
     <div class="block" id="pkBar" hidden>
       <div class="row" style="gap:8px"><button class="main" id="pkImport" style="flex:1">＋ Captures d'enlèvement</button><button class="ghost" id="pkAdd">Saisir</button></div>
       <p class="small muted" id="pkInfo" style="margin:8px 0 0"></p>
-    </div>
-    <div class="block" style="padding:8px">
-      <div class="mapwrap"><div id="map"></div><div class="mapctl"><button id="mzIn" aria-label="Zoomer">+</button><button id="mzOut" aria-label="Dézoomer">−</button><button id="mzReset" aria-label="Recentrer">⟲</button></div><div class="maptip" id="mapTip" hidden></div></div>
-      <p class="small muted" style="margin:8px 4px 0">Pince ou double-touche pour zoomer, glisse pour te déplacer. Chaque cercle regroupe les adresses d'un code postal ; en zoomant, chaque adresse apparaît en point.</p>
     </div>
     <div class="block"><h2 id="zonesTitle">Zones de livraison</h2><div id="zones"></div></div>
     <div class="block" id="pkListBlock" hidden><h2>Derniers enlèvements</h2><div id="pkList"></div></div>
@@ -674,7 +672,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 11</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 13</p>
   </div>
 </dialog>
 
@@ -702,7 +700,7 @@ let S = {...DEFAULTS};
 // months["2026-10"] = { days: {"2026-10-01":{km,pts}}, stops: [{id,d,t,km,addr,cp,city,lat,lng}] }
 let months = {};
 let selMonth = monthKey(isoDate(new Date()));
-let statRange = "month", mapView = "paris", mapRange = "month", mapLayer = "liv";
+let statRange = "month", mapRange = "month", mapLayer = "liv";
 
 const normMonth = v => {
   if(Array.isArray(v)) return {days:{}, stops:v};              // ancien format
@@ -1060,8 +1058,58 @@ function zoneName(z){
   if(/^750\d\d$/.test(z.cp)){ const a=+z.cp.slice(3); return `Paris ${a}${a===1?"er":"e"}`; }
   return (z.city||"Inconnu")+(z.cp?` (${z.cp})`:"");
 }
+// position de la carte mémorisée (centre + zoom), quelle que soit la vue affichée
+let mapState=null, mapSaveT=null;
+try{ mapState=JSON.parse(localStorage.getItem("courscore-map")||"null"); }catch(e){}
+function saveMapState(){ clearTimeout(mapSaveT); mapSaveT=setTimeout(()=>{ try{ localStorage.setItem("courscore-map",JSON.stringify(mapState)); }catch(e){} },400); }
+// contours officiels des 20 arrondissements (Paris Open Data), gardés en mémoire après le 1er chargement
+let arrGeo=null, arrP=null;
+const ARR_KEY="courscore-arr-v1";
+try{ const c=localStorage.getItem(ARR_KEY); if(c) arrGeo=JSON.parse(c); }catch(e){}
+function loadArr(){
+  if(arrGeo) return Promise.resolve();
+  if(arrP) return arrP;
+  const urls=["https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/arrondissements/exports/geojson",
+              "https://opendata.paris.fr/api/records/1.0/download/?dataset=arrondissements&format=geojson"];
+  arrP=(async()=>{ for(const u of urls){ try{
+    const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),12000);
+    const r=await fetch(u,{signal:ctl.signal}); clearTimeout(to); if(!r.ok) continue;
+    const j=await r.json(), rings=[];
+    (j.features||[]).forEach(f=>{ const g=f.geometry; if(!g) return; const polys=g.type==="Polygon"?[g.coordinates]:g.type==="MultiPolygon"?g.coordinates:[]; polys.forEach(pg=>{ const ring=pg[0]; const out=[]; ring.forEach(([x,y])=>out.push([+y.toFixed(5),+x.toFixed(5)])); rings.push(out); }); });
+    if(rings.length>=20){ arrGeo=rings; try{ localStorage.setItem(ARR_KEY,JSON.stringify(rings)); }catch(e){} return; }
+  }catch(e){} } arrP=null; })();
+  return arrP;
+}
+function mapBase(G){
+  const poly=a=>a.map(([la,lo])=>`${G.X(lo).toFixed(1)},${G.Y(la).toFixed(1)}`).join(" ");
+  let s="";
+  if(arrGeo){
+    // 1) trait épais sous tout, 2) remplissage qui masque les traits intérieurs, 3) traits fins des arrondissements
+    s+=arrGeo.map(r=>`<polygon points="${poly(r)}" fill="var(--surface)" stroke="var(--line)" stroke-width="4" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join("");
+    s+=arrGeo.map(r=>`<polygon points="${poly(r)}" fill="var(--surface)" stroke="none"/>`).join("");
+    s+=arrGeo.map(r=>`<polygon points="${poly(r)}" fill="none" stroke="var(--line)" stroke-width=".8" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join("");
+  } else {
+    s+=`<polygon points="${poly(PARIS_OUTLINE)}" fill="var(--surface)" stroke="var(--line)" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  }
+  s+=`<polyline points="${poly(SEINE)}" fill="none" stroke="var(--accent-soft)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity=".8"/>`;
+  Object.entries(PARIS_CP).forEach(([cp,[la,lo]])=>{ if(cp!=="75116") s+=`<text class="arr" x="${G.X(lo)}" y="${G.Y(la)}" dy=".35em" text-anchor="middle" style="font-family:var(--f-num);font-weight:600;fill:var(--muted);opacity:.55" font-size="11">${+cp.slice(3)}</text>`; });
+  return s;
+}
+let mapCtl=null, mapSig="";
+function mapWorld(){
+  // cadre fixe : Paris + toutes les adresses connues (livraisons et enlèvements), au même format que Paris
+  const pla0=48.812,pla1=48.904,plo0=2.215,plo1=2.475, cf=Math.cos(48.86*Math.PI/180);
+  const ll=[...allKeys().flatMap(k=>{ const m=normMonth(months[k]); return [...m.stops,...m.pickups]; })].filter(x=>x.lat!=null&&x.lng!=null&&isFinite(x.lat)&&isFinite(x.lng));
+  let la0=pla0,la1=pla1,lo0=plo0,lo1=plo1;
+  ll.forEach(x=>{ la0=Math.min(la0,x.lat-.015); la1=Math.max(la1,x.lat+.015); lo0=Math.min(lo0,x.lng-.02); lo1=Math.max(lo1,x.lng+.02); });
+  const asp=(pla1-pla0)/((plo1-plo0)*cf);           // hauteur / largeur de Paris
+  const w=(lo1-lo0)*cf, h=(la1-la0);
+  if(h/w<asp){ const nh=w*asp, d=(nh-h)/2; la0-=d; la1+=d; } else { const nw=h/asp/cf, d=(nw-(lo1-lo0))/2; lo0-=d; lo1+=d; }
+  const s=600/(plo1-plo0);                            // Paris = 600 unités de large
+  const X=lng=>(lng-lo0)*s, Y=lat=>(la1-lat)*s/cf;
+  return {X,Y,iX:x=>lo0+x/s,iY:y=>la1-y*cf/s,W:(lo1-lo0)*s,H:(la1-la0)*s/cf, paris:{x:X(plo0),y:Y(pla1),w:600,h:(pla1-pla0)*s/cf}, sig:[la0,la1,lo0,lo1].map(v=>v.toFixed(3)).join(",")};
+}
 function renderCarte(){
-  $$("#mapSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===mapView));
   $$("#mapRange button").forEach(b=>b.classList.toggle("on",b.dataset.r===mapRange));
   $$("#layerSeg button").forEach(b=>b.classList.toggle("on",b.dataset.l===mapLayer));
   const enl=mapLayer==="enl";
@@ -1069,54 +1117,51 @@ function renderCarte(){
   $("#zonesTitle").textContent = enl ? "Zones d'enlèvement" : "Zones de livraison";
   const stops = enl ? pickupsIn(mapRange) : rangeDays(mapRange).flatMap(x=>x.stops);
   if(enl) renderPickups();
-  const zs=zonesFor(stops), pts=zs.filter(z=>z.lat!=null);
-  let la0=48.812,la1=48.904,lo0=2.215,lo1=2.475;
-  if(mapView==="idf" && pts.length){
-    la0=Math.min(la0,...pts.map(p=>p.lat))-0.02; la1=Math.max(la1,...pts.map(p=>p.lat))+0.02;
-    lo0=Math.min(lo0,...pts.map(p=>p.lng))-0.03; lo1=Math.max(lo1,...pts.map(p=>p.lng))+0.03;
+  const G=mapWorld();
+  // fond de carte : construit une seule fois tant que le cadre ne change pas
+  if(G.sig!==mapSig || !$("#map svg")){
+    $("#map").innerHTML=`<svg viewBox="0 0 ${G.W.toFixed(1)} ${G.H.toFixed(1)}" role="img" aria-label="Carte"><g id="mapBase">${mapBase(G)}</g><g id="mapData"></g></svg>`;
+    mapSig=G.sig;
+    const saved=mapState;
+    mapCtl=setupMapZoom($("#map svg"),G);
+    mapState=saved;
+    if(mapState){ const w=600/mapState.z; mapCtl.show({x:G.X(mapState.lo)-w/2, y:G.Y(mapState.la)-(w*G.H/G.W)/2, w},false); }
+    else mapCtl.show(G.paris,false);
+    if(!arrGeo) loadArr().then(()=>{ if(arrGeo && $("#mapBase")) { $("#mapBase").innerHTML=mapBase(G); mapCtl.refresh(); } });
   }
-  const cf=Math.cos(48.86*Math.PI/180), W=600, H=Math.round(W*(la1-la0)/((lo1-lo0)*cf));
-  const X=lng=>(lng-lo0)/(lo1-lo0)*W, Y=lat=>(la1-lat)/(la1-la0)*H;
-  const poly=a=>a.map(([la,lo])=>`${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join(" ");
-  const maxN=Math.max(1,...pts.map(p=>p.n)), k=mapView==="idf"?26:34;
-  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Carte des zones de livraison">
-  <polygon points="${poly(PARIS_OUTLINE)}" fill="var(--surface)" stroke="var(--line)" stroke-width="2" vector-effect="non-scaling-stroke"/>
-  <polyline points="${poly(SEINE)}" fill="none" stroke="var(--accent-soft)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
-  Object.entries(PARIS_CP).forEach(([cp,[la,lo]])=>{ if(cp!=="75116") s+=`<text class="arr" x="${X(lo)}" y="${Y(la)}" dy=".35em" text-anchor="middle" style="font-family:var(--f-num);font-weight:600;fill:var(--muted);opacity:.6" font-size="11">${+cp.slice(3)}</text>`; });
-  pts.forEach((p,i)=>{
-    const r=6+Math.sqrt(p.n/maxN)*k, c=i<3?"var(--amber)":"var(--accent)";
-    s+=`<circle class="bub" data-z="${zs.indexOf(p)}" data-r="${r}" cx="${X(p.lng)}" cy="${Y(p.lat)}" r="${r}" fill="${c}" fill-opacity=".55" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`;
-  });
-  stops.filter(x=>x.lat!=null&&x.lng!=null).forEach(x=>{ s+=`<circle class="dot" data-r="3.2" cx="${X(x.lng).toFixed(1)}" cy="${Y(x.lat).toFixed(1)}" r="3.2" fill="var(--ink)" stroke="var(--surface)" stroke-width="1" vector-effect="non-scaling-stroke"/>`; });
-  s+="</svg>";
-  $("#map").innerHTML = stops.length ? s : `<div class="empty">${enl?"Pas encore d'enlèvement enregistré. Ajoute une capture de l'adresse d'enlèvement au moment où tu récupères un colis.":"Pas encore de livraisons à placer."}</div>`;
-  $(".mapctl").hidden=!stops.length;
+  // couche d'informations : seule partie qui change
+  const zs=zonesFor(stops), pts=zs.filter(z=>z.lat!=null);
+  const maxN=Math.max(1,...pts.map(p=>p.n));
+  let d="";
+  pts.forEach((p,i)=>{ const r=6+Math.sqrt(p.n/maxN)*30, c=i<3?"var(--amber)":"var(--accent)";
+    d+=`<circle class="bub" data-z="${zs.indexOf(p)}" data-r="${r}" cx="${G.X(p.lng)}" cy="${G.Y(p.lat)}" r="${r}" fill="${c}" fill-opacity=".55" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`; });
+  stops.filter(x=>x.lat!=null&&x.lng!=null).forEach(x=>{ d+=`<circle class="dot" data-r="3.2" cx="${G.X(x.lng).toFixed(1)}" cy="${G.Y(x.lat).toFixed(1)}" r="3.2" fill="var(--ink)" stroke="var(--surface)" stroke-width="1" vector-effect="non-scaling-stroke"/>`; });
+  $("#mapData").innerHTML=d;
+  mapCtl.refresh();
   $("#mapTip").hidden=true;
-  const svg=$("#map svg");
-  if(svg) setupMapZoom(svg,W,H);
-  $$("#map circle.bub").forEach(c=>c.addEventListener("click",()=>{ if(svg && svg._moved && svg._moved()>8) return; const z=zs[+c.dataset.z], t=$("#mapTip"); t.hidden=false; t.innerHTML=`<b>${esc(zoneName(z))}</b> : ${pl(z.n,enl?"enlèvement":"livraison")}`;}));
+  $$("#map circle.bub").forEach(c=>c.addEventListener("click",()=>{ if(mapCtl.moved()>8) return; const z=zs[+c.dataset.z], t=$("#mapTip"); t.hidden=false; t.innerHTML=`<b>${esc(zoneName(z))}</b> : ${pl(z.n,enl?"enlèvement":"livraison")}`;}));
   const tot=stops.length||1;
   $("#zones").innerHTML = zs.length ? zs.slice(0,15).map(z=>`<div class="zone"><span>${esc(zoneName(z))}</span><span class="muted">${Math.round(z.n/tot*100)} %</span><b>${z.n}</b></div>`).join("") + (zs.some(z=>z.lat==null)?`<p class="small muted">Certaines zones n'ont pas pu être placées sur la carte.</p>`:"") : `<div class="empty">Rien pour l'instant.</div>`;
 }
-// zoom et déplacement de la carte (pincer, glisser, double-toucher, molette, boutons)
-function setupMapZoom(svg,W,H){
-  let vb={x:0,y:0,w:W,h:H}; const minW=W/10;
-  const bubs=[...svg.querySelectorAll("circle.bub")], dots=[...svg.querySelectorAll("circle.dot")], arrs=[...svg.querySelectorAll("text.arr")];
+// zoom et déplacement (pincer, glisser, double-toucher, molette)
+function setupMapZoom(svg,G){
+  const W=G.W, H=G.H, minW=60;
+  let vb={x:0,y:0,w:W,h:H}, anim=null;
+  let bubs=[], dots=[], arrs=[];
   const apply=()=>{
     svg.setAttribute("viewBox",`${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`);
-    const z=W/vb.w;
+    const z=Math.max(1,600/vb.w);
     bubs.forEach(c=>c.setAttribute("r",(+c.dataset.r/Math.pow(z,.75)).toFixed(2)));
     dots.forEach(c=>c.setAttribute("r",(+c.dataset.r/z*1.4).toFixed(2)));
     arrs.forEach(t=>t.setAttribute("font-size",(11/Math.pow(z,.85)).toFixed(2)));
-    svg.classList.toggle("zin",z>=2.2);
+    svg.classList.toggle("zin",600/vb.w>=2.2);
+    mapState={lo:G.iX(vb.x+vb.w/2), la:G.iY(vb.y+vb.h/2), z:600/vb.w}; saveMapState();
   };
   const clamp=()=>{ vb.w=Math.min(W,Math.max(minW,vb.w)); vb.h=vb.w*H/W; vb.x=Math.min(W-vb.w,Math.max(0,vb.x)); vb.y=Math.min(H-vb.h,Math.max(0,vb.y)); };
   const toSvg=(cx,cy)=>{ const r=svg.getBoundingClientRect(); return {x:vb.x+(cx-r.left)/r.width*vb.w, y:vb.y+(cy-r.top)/r.height*vb.h}; };
-  const zoomAt=(cx,cy,f)=>{ const p=toSvg(cx,cy), nw=Math.min(W,Math.max(minW,vb.w/f)), k=nw/vb.w; vb.x=p.x-(p.x-vb.x)*k; vb.y=p.y-(p.y-vb.y)*k; vb.w=nw; vb.h=nw*H/W; clamp(); apply(); };
-  const zoomCenter=f=>{ const r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,f); };
+  const zoomAt=(cx,cy,f)=>{ if(anim){cancelAnimationFrame(anim);anim=null;} const p=toSvg(cx,cy), nw=Math.min(W,Math.max(minW,vb.w/f)), k=nw/vb.w; vb.x=p.x-(p.x-vb.x)*k; vb.y=p.y-(p.y-vb.y)*k; vb.w=nw; vb.h=nw*H/W; clamp(); apply(); };
   const ptrs=new Map(); let moved=0, pinchD=0, lastTap=0;
-  svg._moved=()=>moved;
-  svg.addEventListener("pointerdown",e=>{ try{svg.setPointerCapture(e.pointerId);}catch(_){} ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(ptrs.size===1) moved=0; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinchD=Math.hypot(a.x-b.x,a.y-b.y); } });
+  svg.addEventListener("pointerdown",e=>{ try{svg.setPointerCapture(e.pointerId);}catch(_){} if(anim){cancelAnimationFrame(anim);anim=null;} ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(ptrs.size===1) moved=0; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinchD=Math.hypot(a.x-b.x,a.y-b.y); } });
   svg.addEventListener("pointermove",e=>{
     if(!ptrs.has(e.pointerId)) return; e.preventDefault();
     const prev=ptrs.get(e.pointerId), cur={x:e.clientX,y:e.clientY}; ptrs.set(e.pointerId,cur);
@@ -1127,9 +1172,18 @@ function setupMapZoom(svg,W,H){
     if(e.type==="pointerup" && ptrs.size===0 && moved<8){ const now=Date.now(); if(now-lastTap<300){ zoomAt(e.clientX,e.clientY,2.2); lastTap=0; } else lastTap=now; } };
   svg.addEventListener("pointerup",up); svg.addEventListener("pointercancel",up);
   svg.addEventListener("wheel",e=>{ e.preventDefault(); zoomAt(e.clientX,e.clientY,e.deltaY<0?1.18:1/1.18); },{passive:false});
-  $("#mzIn").onclick=()=>zoomCenter(1.6); $("#mzOut").onclick=()=>zoomCenter(1/1.6);
-  $("#mzReset").onclick=()=>{ vb={x:0,y:0,w:W,h:H}; apply(); };
+  const show=(r,smooth)=>{
+    const to={x:r.x,y:r.y,w:r.w,h:r.w*H/W};
+    if(!smooth || reduceMotion){ vb={...to}; clamp(); apply(); return; }
+    const from={...vb}, t0=performance.now(), dur=450;
+    if(anim) cancelAnimationFrame(anim);
+    const step=t=>{ const k=Math.min(1,(t-t0)/dur), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      vb={x:from.x+(to.x-from.x)*e, y:from.y+(to.y-from.y)*e, w:from.w+(to.w-from.w)*e, h:0}; vb.h=vb.w*H/W; clamp(); apply();
+      anim = k<1 ? requestAnimationFrame(step) : null; };
+    anim=requestAnimationFrame(step);
+  };
   apply();
+  return { show, moved:()=>moved, refresh:()=>{ bubs=[...svg.querySelectorAll("circle.bub")]; dots=[...svg.querySelectorAll("circle.dot")]; arrs=[...svg.querySelectorAll("text.arr")]; apply(); }, world:()=>({x:0,y:0,w:W,h:H}), paris:()=>G.paris };
 }
 
 /* ---------- Missions ---------- */
@@ -2018,7 +2072,6 @@ document.addEventListener("touchend",e=>{ const now=Date.now(); if(now-lastTouch
 
 $$("#modeSeg button").forEach(b=>b.onclick=()=>{ if(S.goalMode===b.dataset.m) return; S.goalMode=b.dataset.m; saveSettings(); renderAll(); });
 $$("#rangeSeg button").forEach(b=>b.onclick=()=>{statRange=b.dataset.r;renderStats();});
-$$("#mapSeg button").forEach(b=>b.onclick=()=>{mapView=b.dataset.v;renderCarte();});
 $$("#mapRange button").forEach(b=>b.onclick=()=>{mapRange=b.dataset.r;renderCarte();});
 $("#monthSel").onchange=e=>{selMonth=e.target.value;renderMois();};
 $("#btnSettings").onclick=openSettings;
