@@ -501,6 +501,14 @@ input,select,textarea{font-size:16px!important}
 
 /* un élément masqué reste masqué, quel que soit son style */
 [hidden]{display:none!important}
+
+.wxcard,.wxdet{--wx-bg:var(--surface2)}
+.wxcard{--wx-bg:var(--surface)}
+:root[data-skin="onyx"] .wxcard{--wx-bg:#141416}
+#dlgWx svg.chart{--wx-bg:var(--surface)}
+.strip .wxi{--wx-bg:var(--surface)}
+:root[data-skin="onyx"] .strip .wxi,:root[data-skin="onyx"] #dlgWx svg.chart{--wx-bg:#131315}
+.wxdet{--wx-bg:var(--surface2)}
 </style>
 </head>
 <body>
@@ -716,7 +724,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 17</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 18</p>
   </div>
 </dialog>
 
@@ -2016,12 +2024,14 @@ const WMO={0:["Ciel dégagé","sun",0],1:["Peu nuageux","sunc",0],2:["Partiellem
   80:["Averses faibles","rain",2],81:["Averses modérées","rain",3],82:["Averses violentes","rain2",5],85:["Averses de neige faibles","snow",3],86:["Averses de neige fortes","snow",5],
   95:["Orage","storm",5],96:["Orage avec grêle","storm",6],99:["Orage violent avec grêle","storm",6]};
 const wmo=c=>WMO[c]||["—","cloud",0];
-function wxIcon(kind,size=44){
+function wxIcon(kind,size=44,night=false){
   const c="currentColor", a="var(--accent)";
-  const cloud=`<path d="M14 34h20a8 8 0 0 0 0-16 11 11 0 0 0-21-2A9 9 0 0 0 14 34z" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
+  // le nuage est rempli de la couleur du fond : il passe devant le soleil ou la lune au lieu de les laisser apparaître en transparence
+  const cloud=`<path d="M14 34h20a8 8 0 0 0 0-16 11 11 0 0 0-21-2A9 9 0 0 0 14 34z" fill="var(--wx-bg,var(--surface))" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
+  const moon=(x,y,r)=>`<path d="M${x+r*.35} ${y-r}a${r} ${r} 0 1 0 ${r*.65} ${r*1.55} ${r*.8} ${r*.8} 0 0 1 ${-r*.65} ${-r*1.55}z" fill="none" stroke="${a}" stroke-width="2.2" stroke-linejoin="round"/>`;
   const sun=(x,y,r)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${a}" stroke-width="2.2"/>`+[0,45,90,135,180,225,270,315].map(t=>{const q=t*Math.PI/180;return `<line x1="${(x+Math.cos(q)*(r+3)).toFixed(1)}" y1="${(y+Math.sin(q)*(r+3)).toFixed(1)}" x2="${(x+Math.cos(q)*(r+6)).toFixed(1)}" y2="${(y+Math.sin(q)*(r+6)).toFixed(1)}" stroke="${a}" stroke-width="2" stroke-linecap="round"/>`;}).join("");
   const drops=(n,len)=>Array.from({length:n},(_,i)=>`<line x1="${17+i*7}" y1="38" x2="${15+i*7}" y2="${38+len}" stroke="${a}" stroke-width="2.2" stroke-linecap="round"/>`).join("");
-  const b={sun:sun(24,24,8), sunc:sun(30,16,6)+cloud, cloud:cloud, fog:cloud+`<line x1="12" y1="40" x2="38" y2="40" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".7"/><line x1="16" y1="45" x2="34" y2="45" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".5"/>`,
+  const b={sun:night?moon(22,24,10):sun(24,24,8), sunc:(night?moon(31,9,7.5):sun(33,13,6))+cloud, cloud:cloud, fog:cloud+`<line x1="12" y1="40" x2="38" y2="40" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".7"/><line x1="16" y1="45" x2="34" y2="45" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".5"/>`,
     drz:cloud+drops(3,3), rain:cloud+drops(3,6), rain2:cloud+drops(4,8),
     snow:cloud+[0,1,2].map(i=>`<circle cx="${18+i*7}" cy="${41+(i%2)*3}" r="1.8" fill="${a}"/>`).join(""),
     storm:cloud+`<path d="M25 34l-4 7h5l-3 7" fill="none" stroke="${a}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`}[kind]||cloud;
@@ -2032,7 +2042,7 @@ async function wxFetch(url){ const ctl=new AbortController(), to=setTimeout(()=>
 const HOURLY="temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m";
 async function wxRecentData(force){
   if(force || !wxRecent || Date.now()-wxRecent.at>10*60*1000){
-    const j=await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}&current=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&hourly=${HOURLY},precipitation_probability&past_days=92&forecast_days=10&timezone=Europe%2FParis&wind_speed_unit=kmh`);
+    const j=await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}&current=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day&hourly=${HOURLY},precipitation_probability,is_day&past_days=92&forecast_days=10&timezone=Europe%2FParis&wind_speed_unit=kmh`);
     if(j && j.hourly) wxRecent={at:Date.now(), data:j};
   }
   return wxRecent ? wxRecent.data : null;
@@ -2063,7 +2073,7 @@ async function getWx15(day){
 }
 function wxDay(data,day){
   const h=data.hourly, out=[];
-  h.time.forEach((t,i)=>{ if(t.startsWith(day)) out.push({h:+t.slice(11,13), m:+t.slice(11,13)*60, step:60, t:h.temperature_2m[i], p:h.precipitation[i]||0, c:h.weather_code[i], w:h.wind_speed_10m[i], g:h.wind_gusts_10m?h.wind_gusts_10m[i]:null, pp:h.precipitation_probability?h.precipitation_probability[i]:null}); });
+  h.time.forEach((t,i)=>{ if(t.startsWith(day)) out.push({h:+t.slice(11,13), m:+t.slice(11,13)*60, step:60, t:h.temperature_2m[i], p:h.precipitation[i]||0, c:h.weather_code[i], w:h.wind_speed_10m[i], g:h.wind_gusts_10m?h.wind_gusts_10m[i]:null, pp:h.precipitation_probability?h.precipitation_probability[i]:null, day:h.is_day?h.is_day[i]:null}); });
   return out;
 }
 function wxDaySummary(hrs){
@@ -2108,7 +2118,8 @@ async function renderWeather(force){
     if(!pre) sub=sub.charAt(0).toUpperCase()+sub.slice(1);
   }
   const [lab,kind]=wmo(code), lv=rainLvl(precip);
-  el.innerHTML=`<div class="wx-ic">${wxIcon(kind)}</div>
+  const night = data.current ? data.current.is_day===0 : false;
+  el.innerHTML=`<div class="wx-ic">${wxIcon(kind,44,night)}</div>
     <div class="wx-main"><div class="wx-lab">${lab}${lv&&!/faible|modérée|forte|dense|violent/i.test(lab)?` · ${RAIN_TXT[lv]}`:""}</div><div class="wx-sub small muted">${sub}</div></div>
     <div class="wx-side"><div class="wx-t num">${tTxt}</div><div class="small muted">💨 ${Math.round(wind)} km/h${gust?` · raf. ${Math.round(gust)}`:""}</div></div>`;
   el.onclick=()=>openWxChart(day,hrs);
@@ -2129,9 +2140,10 @@ async function openWxChart(day,hrs){
   $("#dlgWx").showModal();
   const q=await getWx15(day);
   const series = q || hrs.map(x=>({...x}));
+  const dayAt=m=>{ const h=hrs.find(x=>x.m===Math.ceil(m/60)*60) || hrs.find(x=>x.h===Math.floor(m/60)); return h&&h.day===0?false:true; };
   const ppAt=m=>{ const h=hrs.find(x=>x.m===Math.ceil(m/60)*60) || hrs.find(x=>x.h===Math.floor(m/60)); return h?h.pp:null; };
   const now=new Date(), nowM=now.getHours()*60+now.getMinutes();
-  wxc={day, series, ppAt, a:0, b:1440, sel:null, isToday:day===today, nowM, fine:!!q};
+  wxc={day, series, ppAt, dayAt, a:0, b:1440, sel:null, isToday:day===today, nowM, fine:!!q};
   $("#wxRes").textContent = q ? "Précision : 15 minutes" : "Précision : 1 heure";
   if(wxc.isToday){ wxc.a=Math.max(0,nowM-180); wxc.b=Math.min(1440,wxc.a+720); wxc.a=wxc.b-720; wxc.sel=nearestSample(nowM); }
   drawWxChart(); bindWxGestures();
@@ -2165,7 +2177,7 @@ function drawWxChart(){
   // icônes + températures en haut
   const iconStep = span>720?180: span>360?60: span>150?30:15;
   for(let m=Math.ceil(c.a/iconStep)*iconStep; m<c.b; m+=iconStep){ const x=nearestSample(m+1); if(!x||X(m)<pl+6||X(m)>W-pr-6) continue; const code=x.c!=null?x.c:(c.series.find(y=>y.c!=null)||{}).c;
-    s+=`<g transform="translate(${X(m)-9},0)" style="color:var(--ink)">${wxIcon(wmo(code)[1],18)}</g>${x.t!=null?`<text x="${X(m)}" y="${pt-10}" text-anchor="middle" style="fill:var(--ink)">${Math.round(x.t)}°</text>`:""}`; }
+    s+=`<g transform="translate(${X(m)-9},0)" style="color:var(--ink)">${wxIcon(wmo(code)[1],18,!c.dayAt(m+1))}</g>${x.t!=null?`<text x="${X(m)}" y="${pt-10}" text-anchor="middle" style="fill:var(--ink)">${Math.round(x.t)}°</text>`:""}`; }
   if(c.sel){ const x=c.sel; s+=`<line x1="${X(x.m-x.step/2)}" x2="${X(x.m-x.step/2)}" y1="${pt-8}" y2="${H-pb}" stroke="var(--accent)" stroke-width="1.5"/>`; }
   s+=`</svg>`;
   $("#wxBox").innerHTML=s;
@@ -2175,7 +2187,7 @@ function drawWxChart(){
 function wxDetail(){
   const x=wxc.sel, el=$("#wxDet"); if(!x){ el.innerHTML=`<p class="small muted" style="margin:0">Touche le graphique pour voir le détail d'un créneau.</p>`; return; }
   const code=x.c!=null?x.c:null, lv=rainLvl(x.p), pp=wxc.ppAt(x.m);
-  el.innerHTML=`<div class="wxd-h"><span class="wxd-ic">${wxIcon(wmo(code)[1],30)}</span><div><b>${fmtM(x.m-x.step)} – ${fmtM(x.m)}</b><div class="small muted">${code!=null?wmo(code)[0]:""}</div></div></div>
+  el.innerHTML=`<div class="wxd-h"><span class="wxd-ic">${wxIcon(wmo(code)[1],30,!wxc.dayAt(x.m-x.step/2))}</span><div><b>${fmtM(x.m-x.step)} – ${fmtM(x.m)}</b><div class="small muted">${code!=null?wmo(code)[0]:""}</div></div></div>
     <div class="wxd-g">
       <div><span class="small muted">Précipitations</span><b>${x.p>0.05?`${n1(x.p)} mm/h`:"Aucune"}</b>${lv?`<span class="small" style="color:${RAIN_COL[lv]}">${RAIN_TXT[lv]}</span>`:""}</div>
       <div><span class="small muted">Probabilité</span><b>${pp!=null?pp+" %":"—"}</b></div>
