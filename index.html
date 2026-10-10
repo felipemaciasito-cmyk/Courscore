@@ -436,13 +436,16 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none;overflow-x:hidden;-webki
 input,select,textarea{font-size:16px!important}
 /* ===== frise glissante ===== */
 .tlwrap{position:relative;margin:12px -16px 0}
-.strip{position:relative;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;padding:6px calc(50% - 26px) 4px;scrollbar-width:none;touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
+.strip{position:relative;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;padding:6px 0 4px;scrollbar-width:none;touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent)}
 .strip::-webkit-scrollbar{display:none}
+.strip .spc{flex:0 0 calc(50% - 26px);pointer-events:none}
 .strip .dbtn{flex:0 0 52px;min-width:52px;scroll-snap-align:center;scroll-snap-stop:normal}
-.strip .dbtn::before{content:"";position:absolute;left:0;right:0;top:calc(1.05rem + 25px);height:1px;background:var(--line);z-index:-1}
+.strip .dbtn>span:first-child{display:block;height:16px;line-height:16px}
+.strip .dbtn .c{flex:0 0 40px}
+.strip .dbtn::before{content:"";position:absolute;left:0;right:0;top:41px;height:1px;background:var(--line);z-index:-1}
 .strip .dbtn .c{transition:transform .25s ease,box-shadow .3s ease,background .25s ease}
-.tlring{position:absolute;left:50%;width:52px;height:52px;margin-left:-26px;border-radius:50%;border:1.5px solid var(--accent);opacity:.75;pointer-events:none;z-index:3}
+.tlring{position:absolute;left:50%;top:21px;width:52px;height:52px;margin-left:-26px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--accent);opacity:.75;pointer-events:none;z-index:3}
 .strip .dbtn.sel .c{transform:scale(1.12);box-shadow:0 0 0 2px var(--surface),0 0 16px 3px color-mix(in srgb,var(--accent) 55%,transparent)!important}
 .strip .dbtn.sel.off .c{opacity:.85;box-shadow:0 0 14px 2px color-mix(in srgb,var(--muted) 45%,transparent)!important}
 .strip .dbtn.sel>span:first-child{color:var(--ink);opacity:1}
@@ -540,14 +543,20 @@ input,select,textarea{font-size:16px!important}
   <!-- CARTE -->
   <section class="panel" id="p-carte">
     <div class="block flat row" style="justify-content:space-between">
+      <div class="seg" id="layerSeg" style="width:100%;display:flex"><button data-l="liv" style="flex:1">Livraisons</button><button data-l="enl" style="flex:1">Enlèvements</button></div>
       <div class="seg" id="mapSeg"><button data-v="paris">Paris</button><button data-v="idf">Toute la zone</button></div>
       <div class="seg" id="mapRange"><button data-r="month">Ce mois</button><button data-r="all">Tout</button></div>
     </div>
+    <div class="block" id="pkBar" hidden>
+      <div class="row" style="gap:8px"><button class="main" id="pkImport" style="flex:1">＋ Captures d'enlèvement</button><button class="ghost" id="pkAdd">Saisir</button></div>
+      <p class="small muted" id="pkInfo" style="margin:8px 0 0"></p>
+    </div>
     <div class="block" style="padding:8px">
       <div class="mapwrap"><div id="map"></div><div class="mapctl"><button id="mzIn" aria-label="Zoomer">+</button><button id="mzOut" aria-label="Dézoomer">−</button><button id="mzReset" aria-label="Recentrer">⟲</button></div><div class="maptip" id="mapTip" hidden></div></div>
-      <p class="small muted" style="margin:8px 4px 0">Pince ou double-touche pour zoomer, glisse pour te déplacer. Chaque cercle regroupe les livraisons d'un code postal ; en zoomant, chaque livraison apparaît en point.</p>
+      <p class="small muted" style="margin:8px 4px 0">Pince ou double-touche pour zoomer, glisse pour te déplacer. Chaque cercle regroupe les adresses d'un code postal ; en zoomant, chaque adresse apparaît en point.</p>
     </div>
-    <div class="block"><h2>Zones de livraison</h2><div id="zones"></div></div>
+    <div class="block"><h2 id="zonesTitle">Zones de livraison</h2><div id="zones"></div></div>
+    <div class="block" id="pkListBlock" hidden><h2>Derniers enlèvements</h2><div id="pkList"></div></div>
   </section>
 
   <!-- MISSIONS -->
@@ -624,6 +633,21 @@ input,select,textarea{font-size:16px!important}
   </div>
 </dialog>
 
+<!-- Pickup -->
+<dialog id="dlgPk">
+  <div class="dh"><h2>Enlèvement</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
+  <div class="db">
+    <div class="grid2">
+      <label class="f">Date<input type="date" id="pkD"></label>
+      <label class="f">Heure<input type="time" id="pkT"></label>
+    </div>
+    <div class="lbl" style="margin-bottom:6px">Adresse d'enlèvement</div>
+    <button type="button" class="adpick" id="pkAddr">Choisir l'adresse…</button>
+    <p class="small" id="pkErr" style="color:var(--bad)"></p>
+    <button class="main" id="pkSave">Enregistrer l'enlèvement</button>
+  </div>
+</dialog>
+
 <!-- Settings -->
 <dialog id="dlgSet">
   <div class="dh"><h2>Réglages</h2><button class="iconbtn" data-close aria-label="Fermer">✕</button></div>
@@ -650,7 +674,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 8</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 11</p>
   </div>
 </dialog>
 
@@ -678,13 +702,13 @@ let S = {...DEFAULTS};
 // months["2026-10"] = { days: {"2026-10-01":{km,pts}}, stops: [{id,d,t,km,addr,cp,city,lat,lng}] }
 let months = {};
 let selMonth = monthKey(isoDate(new Date()));
-let statRange = "month", mapView = "paris", mapRange = "month";
+let statRange = "month", mapView = "paris", mapRange = "month", mapLayer = "liv";
 
 const normMonth = v => {
   if(Array.isArray(v)) return {days:{}, stops:v};              // ancien format
-  return {days:(v&&typeof v.days==="object"&&v.days)||{}, stops:Array.isArray(v&&v.stops)?v.stops:[]};
+  return {days:(v&&typeof v.days==="object"&&v.days)||{}, stops:Array.isArray(v&&v.stops)?v.stops:[], pickups:Array.isArray(v&&v.pickups)?v.pickups:[]};
 };
-const M = k => (months[k] = months[k] ? normMonth(months[k]) : {days:{},stops:[]});
+const M = k => (months[k] = months[k] ? normMonth(months[k]) : {days:{},stops:[],pickups:[]});
 const sum = (arr,f) => arr.reduce((a,x)=>a+(+f(x)||0),0);
 
 /* ---------- day-level data ---------- */
@@ -775,7 +799,7 @@ async function initDb(){
       snap.docs.forEach(d=>{
         const v=d.data()||{};
         if(d.id==="settings") set=v.s;
-        else if(d.id.startsWith("m-")) m[d.id.slice(2)] = normMonth(JSON.parse(JSON.stringify(v.stops||v.days?v:(v.missions||[]))));
+        else if(d.id.startsWith("m-")) m[d.id.slice(2)] = normMonth(JSON.parse(JSON.stringify(v.stops||v.days||v.pickups?v:(v.missions||[]))));
       });
       months=m; if(set) S={...DEFAULTS,...set};
       lsSave(); applyTheme(); renderAll();
@@ -832,13 +856,13 @@ function renderWeek(){
   const worked=new Set(allDays().filter(x=>x.pts>0||x.km>0||x.stops.length).map(x=>x.d));
   const sig=start+"|"+today+"|"+[...worked].join(",")+"|"+S.workDays.join("");
   if(sig!==stripSig){
-    const L=["D","L","M","M","J","V","S"]; let h="", d=start;
+    const L=["D","L","M","M","J","V","S"]; let h=`<span class="spc" aria-hidden="true"></span>`, d=start;
     while(d<=today){
       const wd=dOf(d).getDay(), w=worked.has(d), off=!w && (!S.workDays.includes(wd) || d<today);
       h+=`<button class="dbtn ${w?"worked":""} ${off?"off":""}" data-day="${d}" aria-label="${dOf(d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}"><span>${L[wd]}</span><span class="c">${dOf(d).getDate()}</span><span class="tg">${d===today?"AUJ":""}</span></button>`;
       d=addDays(d,1);
     }
-    strip.innerHTML=h; stripSig=sig;
+    strip.innerHTML=h+`<span class="spc" aria-hidden="true"></span>`; stripSig=sig;
     $$("#wk .dbtn").forEach(b=>b.onclick=()=>centerOn(b.dataset.day,true));
   }
   positionRing();
@@ -846,11 +870,11 @@ function renderWeek(){
   centerOn(selDay,false);
 }
 function stripVisible(){ const st=$("#wk"); return !!(st.offsetParent && st.clientWidth>0); }
-function positionRing(){ if(!stripVisible()) return; const c=$("#wk .c"); if(!c) return; const wr=$(".tlwrap").getBoundingClientRect(), cr=c.getBoundingClientRect(); $("#tlRing").style.top=(cr.top-wr.top+cr.height/2-26)+"px"; }
+function positionRing(){ /* position fixée en CSS : centre du cercle = 6 + 16 + 5 + 20 = 47 px */ }
 function markSel(d){ $$("#wk .dbtn.sel").forEach(b=>b.classList.remove("sel")); const el=$(`#wk [data-day="${d}"]`); if(el) el.classList.add("sel"); }
 function stripLabel(){ const sd=dOf(selDay); $("#wkLabel").textContent=`${MONTHS[sd.getMonth()]} ${sd.getFullYear()}`; $("#wkToday").hidden = selDay===isoDate(new Date()); }
 function centerOn(d,smooth){ const strip=$("#wk"); if(!stripVisible()) return; const i=stripIndexOf(d); if(i<0) return; strip.scrollTo({left:i*STRIP_W, behavior:smooth&&!reduceMotion?"smooth":"auto"}); if(!smooth||reduceMotion) setTimeout(()=>settleStrip(),0); }
-function stripNearest(){ const strip=$("#wk"), n=strip.children.length; if(!n) return null; const i=Math.max(0,Math.min(n-1,Math.round(strip.scrollLeft/STRIP_W))); return strip.children[i].dataset.day; }
+function stripNearest(){ const strip=$("#wk"), items=strip.querySelectorAll(".dbtn"), n=items.length; if(!n) return null; const i=Math.max(0,Math.min(n-1,Math.round(strip.scrollLeft/STRIP_W))); return items[i].dataset.day; }
 function settleStrip(){ if(!stripVisible()) return; const d=stripNearest(); if(!d) return; markSel(d); if(d!==selDay){ selDay=d; stripLabel(); renderJour(true); navPush(); } }
 $("#wk").addEventListener("scroll",()=>{ const d=stripNearest(); if(d) markSel(d); clearTimeout(stripTimer); stripTimer=setTimeout(settleStrip,130); },{passive:true});
 if("onscrollend" in window) $("#wk").addEventListener("scrollend",()=>{ clearTimeout(stripTimer); settleStrip(); });
@@ -1039,7 +1063,12 @@ function zoneName(z){
 function renderCarte(){
   $$("#mapSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===mapView));
   $$("#mapRange button").forEach(b=>b.classList.toggle("on",b.dataset.r===mapRange));
-  const stops=rangeDays(mapRange).flatMap(x=>x.stops);
+  $$("#layerSeg button").forEach(b=>b.classList.toggle("on",b.dataset.l===mapLayer));
+  const enl=mapLayer==="enl";
+  $("#pkBar").hidden=!enl; $("#pkListBlock").hidden=!enl;
+  $("#zonesTitle").textContent = enl ? "Zones d'enlèvement" : "Zones de livraison";
+  const stops = enl ? pickupsIn(mapRange) : rangeDays(mapRange).flatMap(x=>x.stops);
+  if(enl) renderPickups();
   const zs=zonesFor(stops), pts=zs.filter(z=>z.lat!=null);
   let la0=48.812,la1=48.904,lo0=2.215,lo1=2.475;
   if(mapView==="idf" && pts.length){
@@ -1060,12 +1089,12 @@ function renderCarte(){
   });
   stops.filter(x=>x.lat!=null&&x.lng!=null).forEach(x=>{ s+=`<circle class="dot" data-r="3.2" cx="${X(x.lng).toFixed(1)}" cy="${Y(x.lat).toFixed(1)}" r="3.2" fill="var(--ink)" stroke="var(--surface)" stroke-width="1" vector-effect="non-scaling-stroke"/>`; });
   s+="</svg>";
-  $("#map").innerHTML = stops.length ? s : `<div class="empty">Pas encore de livraisons à placer.</div>`;
+  $("#map").innerHTML = stops.length ? s : `<div class="empty">${enl?"Pas encore d'enlèvement enregistré. Ajoute une capture de l'adresse d'enlèvement au moment où tu récupères un colis.":"Pas encore de livraisons à placer."}</div>`;
   $(".mapctl").hidden=!stops.length;
   $("#mapTip").hidden=true;
   const svg=$("#map svg");
   if(svg) setupMapZoom(svg,W,H);
-  $$("#map circle.bub").forEach(c=>c.addEventListener("click",()=>{ if(svg && svg._moved && svg._moved()>8) return; const z=zs[+c.dataset.z], t=$("#mapTip"); t.hidden=false; t.innerHTML=`<b>${esc(zoneName(z))}</b> : ${pl(z.n,"livraison")}`;}));
+  $$("#map circle.bub").forEach(c=>c.addEventListener("click",()=>{ if(svg && svg._moved && svg._moved()>8) return; const z=zs[+c.dataset.z], t=$("#mapTip"); t.hidden=false; t.innerHTML=`<b>${esc(zoneName(z))}</b> : ${pl(z.n,enl?"enlèvement":"livraison")}`;}));
   const tot=stops.length||1;
   $("#zones").innerHTML = zs.length ? zs.slice(0,15).map(z=>`<div class="zone"><span>${esc(zoneName(z))}</span><span class="muted">${Math.round(z.n/tot*100)} %</span><b>${z.n}</b></div>`).join("") + (zs.some(z=>z.lat==null)?`<p class="small muted">Certaines zones n'ont pas pu être placées sur la carte.</p>`:"") : `<div class="empty">Rien pour l'instant.</div>`;
 }
@@ -1698,6 +1727,178 @@ $("#stSave").onclick=()=>{
   saveMonth(k); $("#dlgStop").close(); renderAll();
 };
 
+/* ---------- enlèvements (adresses de récupération des colis) ---------- */
+function allPickups(){ return allKeys().flatMap(k=>normMonth(months[k]).pickups); }
+function pickupsIn(r){
+  const all=allPickups();
+  if(r==="month"){ const k=monthKey(isoDate(new Date())); return all.filter(p=>monthKey(p.d)===k); }
+  return all;
+}
+function renderPickups(){
+  const all=allPickups().slice().sort((a,b)=>(b.d+(b.t||"")).localeCompare(a.d+(a.t||"")));
+  const nDel=allKeys().reduce((a,k)=>a+normMonth(months[k]).stops.length,0);
+  $("#pkInfo").textContent = all.length
+    ? `${pl(all.length,"enlèvement")} enregistré${all.length>1?"s":""}, pour ${pl(nDel,"livraison")}. C'est normal d'en avoir moins : ajoute-les quand tu y penses.`
+    : "Au moment de récupérer un colis, fais une capture de l'adresse d'enlèvement, puis ajoute-la ici.";
+  $("#pkList").innerHTML = all.length ? all.slice(0,40).map(p=>{ const dt=dOf(p.d); return `<div class="mission"><span class="t">${esc(p.t||"--:--")}</span><span class="a" title="${esc(p.addr)}">${esc(p.addr||"—")}${p.dest?`<br><span class="small muted">→ ${esc(p.dest)}</span>`:""}</span><span class="small muted">${dt.getDate()} ${["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."][dt.getMonth()]}</span><span><button class="ed" aria-label="Modifier l'enlèvement" data-pked="${esc(p.id)}">✎</button><button aria-label="Supprimer l'enlèvement" data-pkdel="${esc(p.id)}">✕</button></span></div>`; }).join("") : `<p class="small muted" style="margin:0">Aucun pour l'instant.</p>`;
+  $$("[data-pkdel]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>{ for(const k of allKeys()){ const m=M(k), i=m.pickups.findIndex(x=>x.id===b.dataset.pkdel); if(i>=0){ m.pickups.splice(i,1); saveMonth(k); renderCarte(); return; } } }));
+  $$("[data-pked]").forEach(b=>b.onclick=()=>{ for(const k of allKeys()){ const p=M(k).pickups.find(x=>x.id===b.dataset.pked); if(p){ openPk(p); return; } } });
+}
+function savePickups(list){
+  const touched=new Set();
+  list.forEach(p=>{ const k=monthKey(p.d); M(k).pickups.push({...p, id:p.id||newId()}); touched.add(k); });
+  touched.forEach(k=>{ M(k).pickups.sort((a,b)=>(a.d+(a.t||"")).localeCompare(b.d+(b.t||""))); saveMonth(k); });
+  renderCarte();
+}
+// saisie / modification manuelle
+let pkCtx=null;
+function pkAddrRender(){ const p=pkCtx.place; $("#pkAddr").innerHTML = p ? `<b>${esc(p.name||p.label)}</b><span>${esc(p.cp?placeLabel(p):"")}</span>` : `<b>Choisir l'adresse…</b><span>Île-de-France uniquement</span>`; }
+function openPk(p){
+  const n=new Date();
+  pkCtx={id:p?p.id:null, oldK:p?monthKey(p.d):null, dest:p?p.dest:"", ref:p?p.ref:"", place:p&&p.addr?{label:p.addr,name:p.addr.replace(/\s\d{5}\s.*$/,""),cp:p.cp,city:p.city,lat:p.lat,lng:p.lng}:null};
+  $("#pkD").value=p?p.d:isoDate(n); $("#pkT").value=p?(p.t||""):pad(n.getHours())+":"+pad(n.getMinutes()); $("#pkErr").textContent="";
+  pkAddrRender(); $("#dlgPk").showModal();
+}
+$("#pkAddr").onclick=async()=>{ const c=await openAddrPicker(pkCtx.place?pkCtx.place.label:"", null); if(c){ pkCtx.place=c; pkAddrRender(); } };
+$("#pkSave").onclick=()=>{
+  const d=$("#pkD").value, t=$("#pkT").value, p=pkCtx.place;
+  if(!/^\d{4}-\d\d-\d\d$/.test(d)){ $("#pkErr").textContent="Indique la date."; return; }
+  if(!p || !isIdfCp(p.cp)){ $("#pkErr").textContent="Choisis une adresse en Île-de-France."; return; }
+  const data={d, t, addr:p.label, cp:p.cp, city:p.city, lat:p.lat??null, lng:p.lng??null, dest:pkCtx.dest||"", ref:pkCtx.ref||""};
+  if(pkCtx.id){ const m=M(pkCtx.oldK), i=m.pickups.findIndex(x=>x.id===pkCtx.id); if(i>=0) m.pickups.splice(i,1); saveMonth(pkCtx.oldK); savePickups([{...data,id:pkCtx.id}]); }
+  else savePickups([data]);
+  $("#dlgPk").close();
+};
+$("#pkAdd").onclick=()=>openPk(null);
+$$("#layerSeg button").forEach(b=>b.onclick=()=>{ mapLayer=b.dataset.l; renderCarte(); });
+
+// import de captures d'enlèvement
+const STREET_RE=/^\s*\d{1,4}\s*(bis|ter|[a-d])?\s*,?\s*(rue|avenue|av\.?|boulevard|bd|bld|place|pl\.?|quai|impasse|imp\.?|all[ée]e|chemin|route|rte|cours|square|passage|villa|cit[ée]|rond-point|esplanade|parvis|port|sentier|voie|galerie|faubourg|fbg|promenade|hameau|r[ée]sidence|carrefour|pont)\b/i;
+const CITY_RE=/(\b(75|77|78|91|92|93|94|95)\d{3}\b|Paris\s*\d{1,2}\b)/i;
+function findAddresses(lines){
+  const out=[];
+  for(let i=0;i<lines.length;i++){
+    const t=lines[i].text.replace(/[|¦]/g," ").replace(/\s+/g," ").trim();
+    if(STREET_RE.test(t)){
+      let a=t.replace(/^[^0-9]+/,"");
+      const nx=lines[i+1] && lines[i+1].text.trim();
+      if(!CITY_RE.test(a) && nx && CITY_RE.test(nx) && !STREET_RE.test(nx)){ a+=", "+nx; i++; }
+      out.push(a);
+    } else if(CITY_RE.test(t) && /\d+\s+\w+/.test(t) && t.length>10){ out.push(t.replace(/^[^0-9]+/,"")); }
+  }
+  return [...new Set(out)];
+}
+// écran « Mission » d'Iris Mobile : cartes ENL./LIV. sous « N ACTION(S) »
+// ligne 1 = adresse de l'action, ligne 2 = référence, ligne 3 = « → adresse de destination »
+function parseMissionShot(rows, W, H){
+  const iA=rows.findIndex(r=>/\bactions?\b/i.test(r.text));
+  const from = iA>=0 ? iA+1 : rows.findIndex(r=>r.y>H*.55);
+  const cards=[]; let cur=null;
+  const clean=t=>t.replace(/[|¦]/g," ").replace(/\s+/g," ").trim();
+  for(let i=Math.max(0,from);i<rows.length;i++){
+    const r=rows[i];
+    if(/^(home|planning|mission|stats|chat)\b/i.test(r.text) || r.y>H*.9) break;
+    const parts=r.parts||[{x:W,text:r.text}];
+    const left=clean(parts.filter(p=>p.x<W*.18).map(p=>p.text).join(" "));
+    let right=clean(parts.filter(p=>p.x>=W*.18).map(p=>p.text).join(" "));
+    if(/\bENL\b/i.test(left+" "+right) && cur) cur.type="ENL";
+    else if(/\bLIV\b/i.test(left+" "+right) && cur) cur.type="LIV";
+    right=right.replace(/\b(ENL|LIV)\.?\s*/i,"").trim();
+    if(!right) continue;
+    const arrow=/^[\s→⟶➝➔>»=~+\-–—]{1,4}\s*\d/.test(right);
+    const addrLike=STREET_RE.test(right.replace(/^[^0-9]+/,"")) || (CITY_RE.test(right) && /\d+\s+\D/.test(right));
+    if(cur && cur.addr && cur.ref && !cur.dest && (arrow || addrLike)){ cur.dest=right.replace(/^[^0-9]+/,""); continue; }
+    if(cur && cur.addr && !cur.ref && /\d{5,}/.test(right) && !addrLike){ cur.ref=right; continue; }
+    if(addrLike && !arrow){ cur={addr:right.replace(/^[^0-9]+/,""), ref:"", dest:"", type:""}; cards.push(cur); continue; }
+  }
+  if(cards.length===1 && !cards[0].type) cards[0].type="ENL?";
+  return cards;
+}
+function pkStartImport(){
+  const body=$("#impBody");
+  body.innerHTML=`
+    <p class="small" style="margin-top:0">Choisis tes captures de l'onglet <b>Mission</b> d'Iris Mobile, quand une carte <b>ENL.</b> est affichée. L'app relève l'adresse d'enlèvement, la référence et la destination, avec l'heure de la capture. Tu pourras tout corriger.</p>
+    <label class="f">Captures<input type="file" id="pkFiles" accept="image/*" multiple></label>
+    <button class="main" id="pkGo" disabled>Lire les adresses</button>
+    <div id="pkOut"></div>`;
+  $("#dlgImport").querySelector(".dh h2").textContent="Importer des enlèvements";
+  const f=$("#pkFiles"), go=$("#pkGo");
+  f.onchange=()=>{ go.disabled=!f.files.length; };
+  go.onclick=()=>pkRun([...f.files]);
+  if(!$("#dlgImport").open) $("#dlgImport").showModal();
+}
+let pkPend=[];
+async function pkRun(files){
+  const out=$("#pkOut"), go=$("#pkGo"); go.disabled=true;
+  const say=t=>out.innerHTML=`<p class="small">${t}</p>`;
+  let worker=null;
+  try{
+    const found=[];
+    if(sampleFn && imgLimits && window.claude){
+      say("Lecture des captures…");
+      const res=await sampleFn.json(`Ces images sont des captures de l'onglet « Mission » de l'application coursier Iris Mobile (Coursier.fr, Île-de-France). Sous la carte, après « N ACTION(S) », chaque action est une carte : à gauche le type « ENL. » (enlèvement) ou « LIV. » (livraison) ; à droite, 1re ligne = adresse de l'action (souvent coupée par « … »), 2e ligne = référence (ex. « 94762084 - ERES 19M »), 3e ligne en italique après une flèche « → » = adresse de destination du colis.
+Relève uniquement les cartes ENL. Réponds uniquement en JSON : {"enlevements":[{"image":1,"adresse":"1re ligne telle qu'affichée","reference":"2e ligne","destination":"3e ligne sans la flèche","heure":"HH:MM de la barre d'état en haut ou null"}]}. N'invente rien.`,{images:files.slice(0,imgLimits.maxCount)});
+      (res&&res.enlevements||[]).forEach(e=>{ const f=files[(+e.image||1)-1]; found.push({file:f, addr:String(e.adresse||""), t:e.heure||null, all:[String(e.adresse||"")], dest:String(e.destination||""), ref:String(e.reference||"")}); });
+    } else {
+      say("Chargement du moteur de lecture…");
+      await loadTesseract(); worker=await Tesseract.createWorker("fra");
+      for(let i=0;i<files.length;i++){
+        say(`Lecture de la capture ${i+1} sur ${files.length}…`);
+        const pre=await preprocessShot(files[i]);
+        await worker.setParameters({tessedit_pageseg_mode:"3"});
+        const r=await worker.recognize(pre.full);
+        const lines=ocrLines(r.data).sort((a,b)=>a.y-b.y);
+        const bar=lines.filter(l=>l.y<pre.h*.06).map(l=>l.text.match(/\b(\d{1,2}):(\d{2})\b/)).find(Boolean);
+        const tt=bar?pad(+bar[1])+":"+bar[2]:null;
+        const cards=parseMissionShot(combineOcr(lines,[]), pre.w, pre.h).filter(c=>c.type!=="LIV");
+        if(cards.length) cards.forEach(c=>found.push({file:files[i], addr:c.addr, all:[c.addr], t:tt, dest:c.dest, ref:c.ref}));
+        else { const addrs=findAddresses(lines.filter(l=>l.y>=pre.h*.06)); found.push({file:files[i], addr:addrs[0]||"", all:addrs.length?addrs:[], t:tt}); }
+      }
+      await worker.terminate(); worker=null;
+    }
+    say(`Vérification des adresses… 0 / ${found.length}`);
+    pkPend=[]; let n=0;
+    for(const f of found){
+      const lm=f.file && f.file.lastModified ? new Date(f.file.lastModified) : new Date();
+      const p={d:isoDate(lm), t:f.t || pad(lm.getHours())+":"+pad(lm.getMinutes()), raw:f.addr, alts:f.all.slice(1), dest:f.dest||"", ref:f.ref||"", addr:f.addr, cp:"", city:"", lat:null, lng:null, keep:!!f.addr, st:f.addr?"confirm":"none", cands:[]};
+      if(f.addr){ const g=await resolveAddress(f.addr); p.st=g.st; p.cands=(g.cands||[]).map(x=>({...x})); if(g.st==="ok") applyPlace(p,g.pick); }
+      pkPend.push(p); say(`Vérification des adresses… ${++n} / ${found.length}`);
+    }
+    pkReview();
+  }catch(e){
+    if(worker) try{ await worker.terminate(); }catch(_){}
+    out.innerHTML=`<p class="small" style="color:var(--bad)">${e&&e.message==="load"?"Impossible de charger le moteur de lecture : vérifie ta connexion.":"La lecture a échoué. Réessaie, ou saisis l'adresse à la main."}</p>`; go.disabled=false;
+  }
+}
+function pkReview(){
+  const out=$("#pkOut");
+  if(!pkPend.length){ out.innerHTML=`<p class="small">Aucune capture lue.</p>`; $("#pkGo").disabled=false; return; }
+  const BADGE={ok:`<span class="badge ok">✓ vérifiée</span>`, confirm:`<span class="badge warn">À confirmer</span>`, none:`<span class="badge ko">Introuvable</span>`, offline:`<span class="badge warn">Non vérifiée</span>`};
+  let unresolved=0;
+  let h=pkPend.map((p,i)=>{
+    if(p.keep && (p.st==="confirm"||p.st==="none")) unresolved++;
+    return `<div class="rv"><div class="rvtop"><input type="checkbox" data-pi="${i}" data-pf="keep" ${p.keep?"checked":""} aria-label="Garder">
+      <input type="date" data-pi="${i}" data-pf="d" value="${esc(p.d)}" style="width:100%;font:16px var(--f-ui);padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)">
+      <input type="time" data-pi="${i}" data-pf="t" value="${esc(p.t)}"></div>
+      <div class="rvaddr"><div class="lab">${esc(p.st==="ok"?p.addr:(p.raw||"Aucune adresse lue"))}${BADGE[p.st]||""}</div>
+      ${p.dest||p.ref?`<div class="raw" style="font-style:normal">${p.ref?esc(p.ref):""}${p.dest?`${p.ref?" · ":""}→ ${esc(p.dest)}`:""}</div>`:""}
+      ${p.st==="confirm"&&p.cands.length?`<div class="cands">${p.cands.map((c,ci)=>`<button type="button" class="adopt" data-pk="${i}:${ci}"><b>${esc(c.name)}</b><span>${esc(placeLabel(c))}</span></button>`).join("")}</div>`:""}
+      ${p.alts&&p.alts.length?`<div class="raw">Autres adresses sur la capture : ${p.alts.map((a,ai)=>`<button type="button" class="ghost" style="padding:3px 8px;font-size:.78rem;margin:2px" data-alt="${i}:${ai}">${esc(a)}</button>`).join("")}</div>`:""}
+      <div class="rvbtns"><button type="button" class="ghost" data-pke="${i}">${p.st==="ok"?"Modifier l'adresse":"Saisir l'adresse"}</button></div></div></div>`;
+  }).join("");
+  out.innerHTML=h+(unresolved?`<p class="small" style="color:var(--bad)">${pl(unresolved,"adresse")} à confirmer (ou décoche la capture).</p>`:"")+`<button class="main" id="pkSaveAll" ${unresolved?"disabled":""}>Enregistrer</button>`;
+  $$("#pkOut [data-pf]").forEach(inp=>inp.onchange=()=>{ const p=pkPend[+inp.dataset.pi], f=inp.dataset.pf; if(f==="keep"){ p.keep=inp.checked; pkReview(); } else p[f]=inp.value; });
+  $$("#pkOut [data-pk]").forEach(b=>b.onclick=()=>{ const [i,ci]=b.dataset.pk.split(":").map(Number); applyPlace(pkPend[i],pkPend[i].cands[ci]); pkReview(); });
+  $$("#pkOut [data-alt]").forEach(b=>b.onclick=async()=>{ const [i,ai]=b.dataset.alt.split(":").map(Number), p=pkPend[i], a=p.alts[ai]; p.alts[ai]=p.raw; p.raw=a; p.addr=a; const g=await resolveAddress(a); p.st=g.st; p.cands=(g.cands||[]).map(x=>({...x})); if(g.st==="ok") applyPlace(p,g.pick); p.keep=true; pkReview(); });
+  $$("#pkOut [data-pke]").forEach(b=>b.onclick=async()=>{ const p=pkPend[+b.dataset.pke]; const c=await openAddrPicker(p.st==="ok"?p.addr:p.raw, p.raw); if(c){ applyPlace(p,c); p.keep=true; pkReview(); } });
+  $("#pkSaveAll").onclick=()=>{
+    const keep=pkPend.filter(p=>p.keep && p.st!=="confirm" && p.st!=="none").map(p=>({d:p.d,t:p.t,addr:p.addr,cp:p.cp,city:p.city,lat:p.lat,lng:p.lng,dest:p.dest||"",ref:p.ref||""}));
+    savePickups(keep); $("#dlgImport").close(); showNote(`${pl(keep.length,"enlèvement")} ajouté${keep.length>1?"s":""}.`); setTimeout(()=>showNote(""),4000);
+  };
+}
+$("#pkImport").onclick=async()=>{ await samplePromise; pkStartImport(); };
+$("#dlgImport").addEventListener("close",()=>{ $("#dlgImport").querySelector(".dh h2").textContent="Importer des captures Stats"; });
+
 /* ---------- settings ---------- */
 function openSettings(){
   $("#sT1").value=S.t1; $("#sT2").value=S.t2; $("#sP0").value=S.p0; $("#sP1").value=S.p1; $("#sP2").value=S.p2;
@@ -1757,12 +1958,13 @@ $("#fileRestore").onchange=async e=>{
   const f=e.target.files[0]; if(!f) return;
   try{
     const o=JSON.parse(await f.text()); if(!o||typeof o.months!=="object") throw 0;
-    const keys=existingKeys(), totals={}, stops=[];
+    const keys=existingKeys(), totals={}, stops=[], pks=[], pkKeys=new Set(allPickups().map(p=>p.d+"|"+p.t+"|"+p.addr));
     Object.values(o.months).map(normMonth).forEach(m=>{
       Object.entries(m.days).forEach(([d,t])=>totals[d]=t);
       m.stops.forEach(s=>{ if(s&&s.d&&!keys.has(keyOf(s))){ stops.push(s); keys.add(keyOf(s)); } });
+      m.pickups.forEach(p=>{ if(p&&p.d&&!pkKeys.has(p.d+"|"+p.t+"|"+p.addr)){ pks.push(p); pkKeys.add(p.d+"|"+p.t+"|"+p.addr); } });
     });
-    saveImport(totals, stops);
+    saveImport(totals, stops); if(pks.length) savePickups(pks);
     showNote(`Sauvegarde restaurée : ${pl(Object.keys(totals).length,"journée")}, ${pl(stops.length,"livraison")} ajoutée${stops.length>1?"s":""}.`);
   }catch(err){ showNote("Ce fichier n'est pas une sauvegarde valide.",true); }
   e.target.value="";
@@ -1820,7 +2022,7 @@ $$("#mapSeg button").forEach(b=>b.onclick=()=>{mapView=b.dataset.v;renderCarte()
 $$("#mapRange button").forEach(b=>b.onclick=()=>{mapRange=b.dataset.r;renderCarte();});
 $("#monthSel").onchange=e=>{selMonth=e.target.value;renderMois();};
 $("#btnSettings").onclick=openSettings;
-$("#btnImport").onclick=impStart;
+$("#btnImport").onclick=async()=>{ if(curTab==="carte" && mapLayer==="enl"){ await samplePromise; pkStartImport(); } else impStart(); };
 $$("[data-close]").forEach(b=>b.onclick=()=>{ if(impCtl) impCtl.abort(); b.closest("dialog").close(); });
 
 /* ---------- écran d'ouverture : animation + son ---------- */
