@@ -509,6 +509,21 @@ input,select,textarea{font-size:16px!important}
 .strip .wxi{--wx-bg:var(--surface)}
 :root[data-skin="onyx"] .strip .wxi,:root[data-skin="onyx"] #dlgWx svg.chart{--wx-bg:#131315}
 .wxdet{--wx-bg:var(--surface2)}
+
+.msec{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-size:var(--lbl-size);text-transform:var(--lbl-tt);letter-spacing:var(--lbl-ls);color:var(--muted)}
+.msec span{background:var(--surface2);border-radius:99px;padding:1px 8px;font-size:.72rem;letter-spacing:0}
+.course{display:grid;grid-template-columns:1fr 34px 1fr;align-items:stretch;gap:4px;margin:6px 0}
+.course .cside{position:relative;display:flex;flex-direction:column;gap:2px;padding:9px 10px 30px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);min-width:0}
+.course .ct{font:600 1rem var(--f-num)}
+.course .ca{font-size:.84rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.course .cact{position:absolute;right:4px;bottom:2px}
+.course .cact button{border:0;background:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:4px}
+.course .carrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--accent)}
+.course .carrow span{font-size:.66rem;color:var(--muted);text-align:center;line-height:1.1}
+.ctag{display:inline-block;align-self:flex-start;font:700 .62rem var(--f-ui);letter-spacing:.08em;padding:2px 6px;border-radius:6px}
+.ctag.enl{color:var(--amber);background:color-mix(in srgb,var(--amber) 16%,transparent)}
+.ctag.liv{color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
+:root[data-skin="onyx"] .ctag.liv{color:#EFEBE3;background:rgba(239,235,227,.1)}
 </style>
 </head>
 <body>
@@ -724,7 +739,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 18</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 19</p>
   </div>
 </dialog>
 
@@ -872,7 +887,7 @@ function saveImport(dayTotals, stops){
 function deleteStop(id){
   for(const k of allKeys()){ const m=M(k); const i=m.stops.findIndex(x=>x.id===id); if(i>=0){ m.stops.splice(i,1); saveMonth(k); renderAll(); return; } }
 }
-function deleteDay(d){ const m=M(monthKey(d)); delete m.days[d]; m.stops=m.stops.filter(s=>s.d!==d); saveMonth(monthKey(d)); renderAll(); }
+function deleteDay(d){ const m=M(monthKey(d)); delete m.days[d]; m.stops=m.stops.filter(s=>s.d!==d); m.pickups=m.pickups.filter(p=>p.d!==d); saveMonth(monthKey(d)); renderAll(); }
 function armButton(b, label, action){
   if(b.dataset.arm){ action(); return; }
   const old=b.textContent; b.dataset.arm="1"; b.textContent=label; b.style.color="var(--bad)";
@@ -1250,23 +1265,79 @@ function setupMapZoom(svg,G){
 }
 
 /* ---------- Missions ---------- */
+/* ---------- courses : relier un enlèvement à sa livraison ---------- */
+function addrKey(s){
+  let r=cleanRaw(s||"");
+  const num=(r.match(/^(\d+)\s*(bis|ter|[a-d])?\b/i)||[])[1]||"";
+  let cp=(r.match(/\b((?:75|77|78|91|92|93|94|95)\d{3})\b/)||[])[1]||"";
+  const mp=r.match(/Paris\s*(\d{1,2})\b/i); if(!cp && mp) cp="750"+pad(+mp[1]);
+  if(cp==="75116") cp="75016";
+  let street=r.split(",")[0].replace(/\b\d{5}\b.*$/,"").replace(/\s+Paris\s*\d{0,2}\s*$/i,"");
+  street=street.replace(/^\d+\s*(bis|ter|[a-d])?\s+/i,"").trim();
+  return {num, cp, street};
+}
+function sameAddr(a,b){
+  const A=addrKey(a), B=addrKey(b);
+  if(!A.street || !B.street) return 0;
+  if(A.num && B.num && A.num!==B.num) return 0;
+  if(A.cp && B.cp && A.cp!==B.cp) return 0;
+  const sim=Math.min(streetSim(A.street,B.street), streetSim(B.street,A.street)+.25);
+  return sim>=.6 ? sim+(A.num&&B.num?.2:0)+(A.cp&&B.cp?.1:0) : 0;
+}
+const toMin=t=>/^\d\d:\d\d/.test(t||"")?(+t.slice(0,2))*60+ +t.slice(3,5):null;
+function linkDay(stops,pickups){
+  const used=new Set(), pairs=[], freePk=[];
+  pickups.slice().sort((a,b)=>(a.t||"").localeCompare(b.t||"")).forEach(p=>{
+    const tp=toMin(p.t); let best=null, bs=0;
+    if(p.dest) stops.forEach(s=>{ if(used.has(s.id)) return; const ts=toMin(s.t);
+      if(tp!=null && ts!=null && ts<tp-5) return;                 // la livraison ne peut pas précéder l'enlèvement
+      const sc=sameAddr(p.dest, s.raw||s.addr) || sameAddr(p.dest, s.addr);
+      if(sc && (!best || sc>bs+.05 || (Math.abs(sc-bs)<=.05 && ts!=null && toMin(best.t)!=null && ts<toMin(best.t)))){ best=s; bs=sc; } });
+    if(best){ used.add(best.id); const d=(toMin(best.t)!=null&&tp!=null)?toMin(best.t)-tp:null; pairs.push({p, s:best, dur:d}); }
+    else freePk.push(p);
+  });
+  return {pairs, freePk, freeStops:stops.filter(s=>!used.has(s.id))};
+}
+function pkDelete(id){ for(const k of allKeys()){ const m=M(k), i=m.pickups.findIndex(x=>x.id===id); if(i>=0){ m.pickups.splice(i,1); saveMonth(k); renderAll(); return; } } }
+function pkEdit(id){ for(const k of allKeys()){ const p=M(k).pickups.find(x=>x.id===id); if(p){ openPk(p); return; } } }
+const shortAddr=a=>String(a||"—").replace(/\s+(\d{5})\s+(.+)$/,", $1 $2");
 function renderMissions(){
-  const ds=allDays().reverse();
-  if(!ds.length){ $("#missionList").innerHTML=`<div class="block empty">Aucune journée. Touche « ＋ Captures » pour importer l'onglet Stats d'Iris Mobile, ou saisis tes totaux à la main.</div>`; return; }
+  const byDay=new Map(allDays().map(x=>[x.d,x]));
+  allPickups().forEach(p=>{ if(!byDay.has(p.d)) byDay.set(p.d,{d:p.d,km:0,pts:0,hasTot:false,stops:[],pkOnly:true}); });
+  const ds=[...byDay.values()].sort((a,b)=>b.d.localeCompare(a.d));
+  if(!ds.length){ $("#missionList").innerHTML=`<div class="block empty">Aucune journée. Touche « ＋ Captures » pour importer tes captures d'Iris Mobile, ou saisis tes totaux à la main.</div>`; return; }
+  const pkByDay={}; allPickups().forEach(p=>(pkByDay[p.d]=pkByDay[p.d]||[]).push(p));
   let h="";
   ds.slice(0,60).forEach(x=>{
-    const dt=new Date(x.d+"T12:00");
-    h+=`<div class="block day"><h3><span>${DAYS[dt.getDay()]}. ${dt.getDate()} ${MONTHS[dt.getMonth()]}</span><span class="muted">${n1(x.pts)} pts, ${n1(x.km)} km</span></h3>`+
-      (x.hasTot?"":`<p class="small" style="color:var(--bad);margin:0 0 6px">Totaux du jour manquants : les points de cette journée ne sont pas comptés.</p>`)+
-      x.stops.map(m=>`<div class="mission"><span class="t">${esc(m.t||"--:--")}</span><span class="a" title="${esc(m.addr)}">${esc(m.addr||m.cp||"—")}</span><span class="small">${m.km?n1(m.km)+" km":""}</span><span><button class="ed" aria-label="Modifier la livraison" data-ed="${esc(m.id)}">✎</button><button aria-label="Supprimer la livraison" data-del="${esc(m.id)}">✕</button></span></div>`).join("")+
-      `<div style="display:flex;justify-content:space-between;gap:8px;margin-top:8px"><button class="ghost addstop" data-add="${x.d}">+ Livraison</button><button class="ghost danger small" data-delday="${x.d}">Supprimer la journée</button></div></div>`;
+    const dt=new Date(x.d+"T12:00"), L=linkDay(x.stops, pkByDay[x.d]||[]);
+    h+=`<div class="block day"><h3><span>${DAYS[dt.getDay()]}. ${dt.getDate()} ${MONTHS[dt.getMonth()]}</span><span class="muted">${x.pkOnly?"":`${n1(x.pts)} pts, ${n1(x.km)} km`}</span></h3>`;
+    if(!x.hasTot && !x.pkOnly) h+=`<p class="small" style="color:var(--bad);margin:0 0 6px">Totaux du jour manquants : les points de cette journée ne sont pas comptés.</p>`;
+    if(L.pairs.length){
+      h+=`<div class="msec">Courses complètes <span>${L.pairs.length}</span></div>`;
+      h+=L.pairs.map(({p,s,dur})=>`<div class="course">
+        <div class="cside"><span class="ctag enl">ENL.</span><b class="ct">${esc(p.t||"--:--")}</b><span class="ca">${esc(shortAddr(p.addr))}</span><span class="cact"><button class="ed" aria-label="Modifier l'enlèvement" data-pked="${esc(p.id)}">✎</button><button aria-label="Supprimer l'enlèvement" data-pkdel="${esc(p.id)}">✕</button></span></div>
+        <div class="carrow" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>${dur!=null&&dur>=0?`<span>${dur<60?dur+" min":Math.floor(dur/60)+" h "+pad(dur%60)}</span>`:""}</div>
+        <div class="cside"><span class="ctag liv">LIV.</span><b class="ct">${esc(s.t||"--:--")}</b><span class="ca">${esc(shortAddr(s.addr))}</span><span class="cact"><button class="ed" aria-label="Modifier la livraison" data-ed="${esc(s.id)}">✎</button><button aria-label="Supprimer la livraison" data-del="${esc(s.id)}">✕</button></span></div>
+      </div>`).join("");
+    }
+    if(L.freeStops.length){
+      h+=`<div class="msec">${L.pairs.length?"Autres livraisons":"Livraisons"} <span>${L.freeStops.length}</span></div>`;
+      h+=L.freeStops.map(m=>`<div class="mission"><span class="t">${esc(m.t||"--:--")}</span><span class="a" title="${esc(m.addr)}">${esc(m.addr||m.cp||"—")}</span><span class="small">${m.km?n1(m.km)+" km":""}</span><span><button class="ed" aria-label="Modifier la livraison" data-ed="${esc(m.id)}">✎</button><button aria-label="Supprimer la livraison" data-del="${esc(m.id)}">✕</button></span></div>`).join("");
+    }
+    if(L.freePk.length){
+      h+=`<div class="msec">Enlèvements sans livraison reliée <span>${L.freePk.length}</span></div>`;
+      h+=L.freePk.map(p=>`<div class="mission"><span class="t">${esc(p.t||"--:--")}</span><span class="a" title="${esc(p.addr)}">${esc(p.addr||"—")}${p.dest?`<br><span class="small muted">→ ${esc(p.dest)}</span>`:""}</span><span class="small ctag enl">ENL.</span><span><button class="ed" aria-label="Modifier l'enlèvement" data-pked="${esc(p.id)}">✎</button><button aria-label="Supprimer l'enlèvement" data-pkdel="${esc(p.id)}">✕</button></span></div>`).join("");
+    }
+    h+=`<div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px"><button class="ghost addstop" data-add="${x.d}">+ Livraison</button><button class="ghost danger small" data-delday="${x.d}">Supprimer la journée</button></div></div>`;
   });
   if(ds.length>60) h+=`<p class="small muted">Jours plus anciens masqués : ils restent comptés et exportables.</p>`;
   $("#missionList").innerHTML=h;
-  $$("[data-del]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>deleteStop(b.dataset.del)));
-  $$("[data-delday]").forEach(b=>b.onclick=()=>armButton(b,"Confirmer la suppression",()=>deleteDay(b.dataset.delday)));
-  $$("[data-ed]").forEach(b=>b.onclick=()=>{ const id=b.dataset.ed; for(const k of allKeys()){ const st=M(k).stops.find(x=>x.id===id); if(st){ openStop(st.d, st); return; } } });
-  $$("[data-add]").forEach(b=>b.onclick=()=>openStop(b.dataset.add, null));
+  $$("#missionList [data-del]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>deleteStop(b.dataset.del)));
+  $$("#missionList [data-delday]").forEach(b=>b.onclick=()=>armButton(b,"Confirmer la suppression",()=>deleteDay(b.dataset.delday)));
+  $$("#missionList [data-ed]").forEach(b=>b.onclick=()=>{ const id=b.dataset.ed; for(const k of allKeys()){ const st=M(k).stops.find(x=>x.id===id); if(st){ openStop(st.d, st); return; } } });
+  $$("#missionList [data-add]").forEach(b=>b.onclick=()=>openStop(b.dataset.add, null));
+  $$("#missionList [data-pkdel]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>pkDelete(b.dataset.pkdel)));
+  $$("#missionList [data-pked]").forEach(b=>b.onclick=()=>pkEdit(b.dataset.pked));
 }
 
 function renderAll(){
@@ -1858,14 +1929,14 @@ function renderPickups(){
     ? `${pl(all.length,"enlèvement")} enregistré${all.length>1?"s":""}, pour ${pl(nDel,"livraison")}. C'est normal d'en avoir moins.`
     : "Au moment de récupérer un colis, fais une capture de l'onglet Mission, puis importe-la avec « ＋ Captures ».";
   $("#pkList").innerHTML = all.length ? all.slice(0,40).map(p=>{ const dt=dOf(p.d); return `<div class="mission"><span class="t">${esc(p.t||"--:--")}</span><span class="a" title="${esc(p.addr)}">${esc(p.addr||"—")}${p.dest?`<br><span class="small muted">→ ${esc(p.dest)}</span>`:""}</span><span class="small muted">${dt.getDate()} ${["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."][dt.getMonth()]}</span><span><button class="ed" aria-label="Modifier l'enlèvement" data-pked="${esc(p.id)}">✎</button><button aria-label="Supprimer l'enlèvement" data-pkdel="${esc(p.id)}">✕</button></span></div>`; }).join("") : `<p class="small muted" style="margin:0">Aucun pour l'instant.</p>`;
-  $$("[data-pkdel]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>{ for(const k of allKeys()){ const m=M(k), i=m.pickups.findIndex(x=>x.id===b.dataset.pkdel); if(i>=0){ m.pickups.splice(i,1); saveMonth(k); renderCarte(); return; } } }));
-  $$("[data-pked]").forEach(b=>b.onclick=()=>{ for(const k of allKeys()){ const p=M(k).pickups.find(x=>x.id===b.dataset.pked); if(p){ openPk(p); return; } } });
+  $$("#pkList [data-pkdel]").forEach(b=>b.onclick=()=>armButton(b,"Suppr. ?",()=>pkDelete(b.dataset.pkdel)));
+  $$("#pkList [data-pked]").forEach(b=>b.onclick=()=>pkEdit(b.dataset.pked));
 }
 function savePickups(list){
   const touched=new Set();
   list.forEach(p=>{ const k=monthKey(p.d); M(k).pickups.push({...p, id:p.id||newId()}); touched.add(k); });
   touched.forEach(k=>{ M(k).pickups.sort((a,b)=>(a.d+(a.t||"")).localeCompare(b.d+(b.t||""))); saveMonth(k); });
-  renderCarte();
+  renderAll();
 }
 // saisie / modification manuelle
 let pkCtx=null;
