@@ -548,6 +548,13 @@ input,select,textarea{font-size:16px!important}
 .rpair .rrow.enl{border-bottom:0;padding-bottom:2px}
 .rpair .rrow.liv .ra{color:var(--ink)}
 .rpair .rrow.liv .rt{color:var(--c-liv)}
+
+.offbtn{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;margin:10px 0 2px;padding:9px 12px;border-radius:12px;border:1px dashed var(--line);background:transparent;color:var(--ink);font:500 .88rem var(--f-ui);cursor:pointer;text-align:left}
+.offbtn .small{color:var(--accent);white-space:nowrap}
+.offbtn.on{border-style:solid;border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.offbtn.on .small{color:var(--muted)}
+.strip .dbtn.plan .c{opacity:1!important;background:repeating-linear-gradient(135deg,transparent 0 4px,color-mix(in srgb,var(--accent) 22%,transparent) 4px 6px)!important;border:1.5px solid color-mix(in srgb,var(--accent) 55%,transparent)!important;border-style:solid!important;color:var(--ink)!important}
+.strip .dbtn.plan .tg{color:var(--muted);font-size:.55rem;letter-spacing:.06em}
 </style>
 </head>
 <body>
@@ -579,6 +586,7 @@ input,select,textarea{font-size:16px!important}
     </div>
     <div class="block">
       <div class="lbl" id="todayLabel"></div>
+      <button type="button" class="offbtn" id="offBtn" hidden></button>
       <div class="big num" id="todayEur" style="margin-top:6px">0 €</div>
       <div class="muted small" id="todayHint"></div>
       <div class="kpis" style="margin-top:14px">
@@ -763,7 +771,7 @@ input,select,textarea{font-size:16px!important}
     <h2 style="margin-top:6px">Apparence</h2><div class="skins" id="sSkins"></div>
     <label class="f">Mode clair ou sombre (apparence Standard)<select id="sTheme"><option value="">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
     <button class="main" id="sSave">Enregistrer les réglages</button>
-    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 21</p>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">Courscore · version 22</p>
   </div>
 </dialog>
 
@@ -785,7 +793,7 @@ const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","aoû
 
 const DEFAULTS = {
   t1:700, t2:900, p0:2.1, p1:2.3, p2:2.4, km:0.32, prime:100, primeOn:true,
-  netPct:78, workDays:[1,2,3,4,5], goals:[1000,1500,2000,2500,3000], goalMode:"brut", theme:"", skin:""
+  netPct:78, workDays:[1,2,3,4,5], daysOff:[], goals:[1000,1500,2000,2500,3000], goalMode:"brut", theme:"", skin:""
 };
 let S = {...DEFAULTS};
 // months["2026-10"] = { days: {"2026-10-01":{km,pts}}, stops: [{id,d,t,km,addr,cp,city,lat,lng}] }
@@ -828,7 +836,7 @@ function primeStatus(k){
   const [y,m]=k.split("-").map(Number), today=isoDate(new Date());
   const have=new Set(daysOf([k]).filter(x=>x.pts>0||x.km>0||x.stops.length).map(x=>x.d));
   const abs=[]; const d=new Date(y,m-1,1);
-  while(d.getMonth()===m-1){ const iso=isoDate(d); if(iso>=today) break; if(S.workDays.includes(d.getDay()) && !have.has(iso)) abs.push(iso); d.setDate(d.getDate()+1); }
+  while(d.getMonth()===m-1){ const iso=isoDate(d); if(iso>=today) break; if(isWorkDay(d) && !have.has(iso)) abs.push(iso); d.setDate(d.getDate()+1); }
   return {valid:abs.length===0, abs};
 }
 const primeCounts = k => { const st=primeStatus(k); return !!(st && st.valid); };
@@ -847,9 +855,11 @@ function pointsForGoal(goalInMode, k=monthKey(isoDate(new Date()))){
   for(let P=0;P<=6000;P++){ if(brut(P,P*r,wp) >= target) return P; }
   return null;
 }
+// jour travaillé = jour habituel de travail, sauf jour de repos posé à l'avance
+function isWorkDay(d){ const o=typeof d==="string"?dOf(d):d; return S.workDays.includes(o.getDay()) && !(S.daysOff||[]).includes(isoDate(o)); }
 function workDaysBetween(from, to){
   let c=0; const d=new Date(from.getFullYear(),from.getMonth(),from.getDate());
-  while(d<=to){ if(S.workDays.includes(d.getDay())) c++; d.setDate(d.getDate()+1); }
+  while(d<=to){ if(isWorkDay(d)) c++; d.setDate(d.getDate()+1); }
   return c;
 }
 
@@ -943,12 +953,12 @@ function stripIndexOf(d){ return Math.round((dOf(d)-dOf(stripRange().start))/864
 function renderWeek(){
   const strip=$("#wk"), {start,today,end}=stripRange();
   const worked=new Set(allDays().filter(x=>x.pts>0||x.km>0||x.stops.length).map(x=>x.d));
-  const sig=start+"|"+today+"|"+[...worked].join(",")+"|"+S.workDays.join("");
+  const sig=start+"|"+today+"|"+[...worked].join(",")+"|"+S.workDays.join("")+"|"+(S.daysOff||[]).join(",");
   if(sig!==stripSig){
     const L=["D","L","M","M","J","V","S"]; let h=`<span class="spc" aria-hidden="true"></span>`, d=start;
     while(d<=end){
-      const wd=dOf(d).getDay(), w=worked.has(d), fut=d>today, off=!w && (!S.workDays.includes(wd) || d<today);
-      h+=`<button class="dbtn ${w?"worked":""} ${off?"off":""} ${fut?"fut":""}" data-day="${d}" aria-label="${dOf(d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}"><span>${L[wd]}</span><span class="c">${dOf(d).getDate()}</span><span class="tg">${d===today?"AUJ":""}</span><span class="wxi"></span></button>`;
+      const wd=dOf(d).getDay(), w=worked.has(d), fut=d>today, planned=!w && (S.daysOff||[]).includes(d), off=!w && (!isWorkDay(d) || d<today);
+      h+=`<button class="dbtn ${w?"worked":""} ${off?"off":""} ${fut?"fut":""} ${planned?"plan":""}" data-day="${d}" aria-label="${dOf(d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}"><span>${L[wd]}</span><span class="c">${dOf(d).getDate()}</span><span class="tg">${d===today?"AUJ":planned?"REPOS":""}</span><span class="wxi"></span></button>`;
       d=addDays(d,1);
     }
     strip.innerHTML=h+`<span class="spc" aria-hidden="true"></span>`; stripSig=sig;
@@ -974,6 +984,12 @@ function renderJour(reveal){
   const P=sum(md,x=>x.pts);
   const wd=sd.toLocaleDateString("fr-FR",{weekday:"long"});
   $("#todayLabel").textContent = isToday ? `Aujourd'hui, ${wd} ${sd.getDate()} ${MONTHS[sd.getMonth()]}` : `${wd.charAt(0).toUpperCase()+wd.slice(1)} ${sd.getDate()} ${MONTHS[sd.getMonth()]} ${sd.getFullYear()!==now.getFullYear()?sd.getFullYear():""}`;
+  // poser / retirer un jour de repos (sans données ce jour-là)
+  { const ob=$("#offBtn"), isOff=(S.daysOff||[]).includes(selDay), hasData=td.pts>0||td.km>0||td.stops.length, habit=S.workDays.includes(sd.getDay());
+    ob.hidden = hasData || (!habit && !isOff);
+    ob.classList.toggle("on",isOff);
+    ob.innerHTML = isOff ? `<span>🌙 Jour de repos posé</span><span class="small">Annuler</span>` : `<span>${selDay<today?"Je n'ai pas travaillé ce jour-là (repos)":"Je ne travaillerai pas ce jour-là"}</span><span class="small">Poser un repos</span>`;
+    ob.onclick=()=>{ const set=new Set(S.daysOff||[]); if(set.has(selDay)) set.delete(selDay); else set.add(selDay); S.daysOff=[...set].sort(); saveSettings(); renderAll(); }; }
   animateNum($("#todayEur"), toMode(td.pts*rate(P) + td.km*S.km, S.goalMode), v=>eur(v));
   $("#todayHint").textContent = `${S.goalMode==="net"?"Net estimé":"Brut"}, au prix de ${fr(rate(P))} € le point (${n1(P)} pts sur le mois${k===monthKey(today)?" pour l'instant":""}).`;
   animateNum($("#tPts"), td.pts, n1); animateNum($("#tKm"), td.km, n1); animateNum($("#tMis"), td.stops.length, v=>String(Math.round(v)));
@@ -983,7 +999,10 @@ function renderJour(reveal){
   const daysLeft = workDaysBetween(fromD,end) || 1;
   const before = sum(md.filter(x=>x.d<selDay),x=>x.pts);
   $("#dayGoalsTitle").textContent = isToday ? "Objectifs du jour" : isFut ? "Objectifs prévus" : "Objectifs ce jour-là";
-  $("#dayGoalsIntro").textContent = isFut
+  const dOff=(S.daysOff||[]).includes(selDay);
+  $("#dayGoalsIntro").textContent = dOff
+    ? `Jour de repos posé : il ne compte pas dans tes jours travaillés. Points à faire par jour travaillé restant (${pl(daysLeft,"jour")}) :`
+    : isFut
     ? `Jour à venir. Au rythme nécessaire, il faudra faire ces points par jour travaillé (${pl(daysLeft,"jour")} restant${daysLeft>1?"s":""} dans le mois) :`
     : isToday
     ? `Il reste ${pl(daysLeft,"jour")} travaillé${daysLeft>1?"s":""} ce mois, aujourd'hui compris. Points nécessaires aujourd'hui pour chaque objectif ${S.goalMode==="net"?"net estimé":"brut"} :`
@@ -1060,7 +1079,7 @@ function renderMois(){
     const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1), end=new Date(y,mo,0);
     const rest = tomorrow<=end ? workDaysBetween(tomorrow,end) : 0;
     const todayDone = md.some(x=>x.d===isoDate(now));
-    const restDays = rest + (todayDone?0:(S.workDays.includes(now.getDay())?1:0));
+    const restDays = rest + (todayDone?0:(isWorkDay(now)?1:0));
     const pP=P+P/worked*restDays, pK=K+K/worked*restDays;
     proj=`À ton rythme actuel (${n1(P/worked)} pts par jour travaillé sur ${pl(worked,"jour")}), tu finirais vers <b>${n1(pP)} pts</b>, soit environ <b>${eur(toMode(brut(pP,pK)))}</b> hors prime. Il reste ${pl(restDays,"jour")} travaillé${restDays>1?"s":""} prévu${restDays>1?"s":""}.`;
   } else if(isCurrent) proj="Importe tes premières captures pour voir une projection de fin de mois.";
